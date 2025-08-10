@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Plus, ChevronRight, Server, Folder, Cloud, HardDrive, ArrowRight, X, Loader, CheckCircle, Clock } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Plus, ChevronRight, Server, Folder, Cloud, HardDrive, ArrowRight, X, Loader, CheckCircle, Clock, Cpu, MemoryStick } from 'lucide-react';
 
 // --- Helper Functions ---
 const formatBytes = (bytes, decimals = 2) => {
-  if (bytes === 0) return '0 Bytes';
+  if (!bytes || bytes === 0) return '0 Bytes';
   const k = 1024;
   const dm = decimals < 0 ? 0 : decimals;
   const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB'];
@@ -12,7 +12,7 @@ const formatBytes = (bytes, decimals = 2) => {
 };
 
 const formatSeconds = (seconds) => {
-  if (seconds === Infinity || isNaN(seconds)) return '...';
+  if (seconds === Infinity || isNaN(seconds) || seconds < 0) return '...';
   const d = Math.floor(seconds / (3600*24));
   const h = Math.floor(seconds % (3600*24) / 3600);
   const m = Math.floor(seconds % 3600 / 60);
@@ -78,7 +78,7 @@ const PlanDetails = ({ plan, onClose }) => {
                 const updatedVms = currentPlan.vms.map(vm => {
                     if (vm.status === 'Completed' || vm.status === 'Failed') return vm;
 
-                    let newProgress = vm.progress + Math.random() * 5; // Slower, more realistic progress
+                    let newProgress = vm.progress + Math.random() * 5;
                     let newStatus = 'Copying Disks';
 
                     if (newProgress >= 100) {
@@ -105,7 +105,7 @@ const PlanDetails = ({ plan, onClose }) => {
 
         const totalSize = localPlan.vms.reduce((acc, vm) => acc + (vm.diskSizeGB || 0), 0) * 1024 * 1024 * 1024;
         const transferred = localPlan.vms.reduce((acc, vm) => acc + (vm.diskSizeGB || 0) * (vm.progress / 100), 0) * 1024 * 1024 * 1024;
-        const progress = (transferred / totalSize) * 100;
+        const progress = totalSize > 0 ? (transferred / totalSize) * 100 : 0;
 
         const elapsedSeconds = (Date.now() - startTime) / 1000;
         const speed = elapsedSeconds > 0 ? transferred / elapsedSeconds : 0;
@@ -180,39 +180,56 @@ const PlanDetails = ({ plan, onClose }) => {
 const VmIcon = ({ type }) => {
   switch (type) {
     case 'datacenter': return <Cloud className="w-5 h-5 text-blue-500" />;
-    case 'cluster': return <Server className="w-5 h-5 text-purple-500" />;
-    case 'folder': return <Folder className="w-5 h-5 text-yellow-600" />;
-    case 'vm': return <HardDrive className="w-5 h-5 text-gray-600" />;
+    case 'ClusterComputeResource': return <Server className="w-5 h-5 text-purple-500" />;
+    case 'Folder': return <Folder className="w-5 h-5 text-yellow-600" />;
+    case 'VirtualMachine': return <HardDrive className="w-5 h-5 text-gray-600" />;
     default: return null;
   }
 };
 
-const InventoryTree = ({ node, selectedVms, onVmToggle, level = 0 }) => {
+const InventoryTree = ({ node, selectedVms, onVmToggle, onVmSelect, currentlySelectedVm, level = 0 }) => {
     const [isOpen, setIsOpen] = useState(level < 2);
     const isParent = node.children && node.children.length > 0;
+
+    const handleNodeClick = () => {
+        if (isParent) {
+            setIsOpen(!isOpen);
+        } else if (node.type === 'VirtualMachine') {
+            onVmSelect(node);
+        }
+    };
 
     return (
         <div style={{ paddingLeft: level > 0 ? '20px' : '0px' }}>
             <div
-                className="flex items-center p-2 rounded-md hover:bg-gray-100 cursor-pointer"
-                onClick={() => isParent && setIsOpen(!isOpen)}
+                className={`flex items-center p-2 rounded-md cursor-pointer ${currentlySelectedVm?.name === node.name ? 'bg-blue-100' : 'hover:bg-gray-100'}`}
+                onClick={handleNodeClick}
             >
+                {node.type === 'VirtualMachine' && (
+                    <input
+                        type="checkbox"
+                        className="form-checkbox h-4 w-4 text-blue-600 transition duration-150 ease-in-out mr-3"
+                        checked={selectedVms.some(vm => vm.name === node.name)}
+                        onChange={(e) => { e.stopPropagation(); onVmToggle(node); }}
+                        onClick={(e) => e.stopPropagation()} // Prevent row click from triggering when checkbox is clicked
+                    />
+                )}
                 {isParent && <ChevronRight size={16} className={`mr-1 transform transition-transform ${isOpen ? 'rotate-90' : ''}`} />}
                 <VmIcon type={node.type} />
                 <span className="ml-2 text-gray-800">{node.name}</span>
-                {node.type === 'vm' && (
-                    <input
-                        type="checkbox"
-                        className="ml-auto form-checkbox h-4 w-4 text-blue-600 transition duration-150 ease-in-out"
-                        checked={selectedVms.some(vm => vm.name === node.name)}
-                        onChange={(e) => { e.stopPropagation(); onVmToggle(node); }}
-                    />
-                )}
             </div>
             {isOpen && isParent && (
                 <div>
                     {node.children.map((child, index) => (
-                        <InventoryTree key={index} node={child} selectedVms={selectedVms} onVmToggle={onVmToggle} level={level + 1} />
+                        <InventoryTree 
+                            key={index} 
+                            node={child} 
+                            selectedVms={selectedVms} 
+                            onVmToggle={onVmToggle}
+                            onVmSelect={onVmSelect}
+                            currentlySelectedVm={currentlySelectedVm}
+                            level={level + 1} 
+                        />
                     ))}
                 </div>
             )}
@@ -220,10 +237,51 @@ const InventoryTree = ({ node, selectedVms, onVmToggle, level = 0 }) => {
     );
 };
 
+const VmDetailsPanel = ({ vm }) => {
+    if (!vm) {
+        return (
+            <div className="p-4 border rounded-md bg-gray-50 h-full flex items-center justify-center">
+                <p className="text-gray-500">Select a VM to see details</p>
+            </div>
+        );
+    }
+
+    return (
+        <div className="p-4 border rounded-md bg-gray-50 h-full">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">{vm.name}</h3>
+            <div className="space-y-3 text-sm">
+                <div className="flex items-center">
+                    <Cpu size={16} className="mr-2 text-gray-600" />
+                    <span>{vm.cpu || 'N/A'} vCPU(s)</span>
+                </div>
+                <div className="flex items-center">
+                    <MemoryStick size={16} className="mr-2 text-gray-600" />
+                    <span>{formatBytes((vm.memoryMB || 0) * 1024 * 1024, 0)} Memory</span>
+                </div>
+                <div className="flex items-center">
+                    <HardDrive size={16} className="mr-2 text-gray-600" />
+                    <span>{vm.diskSizeGB || 'N/A'} GB Storage</span>
+                </div>
+                <div>
+                    <h4 className="font-medium text-gray-800 mt-4 mb-1">Networks</h4>
+                    <ul className="list-disc list-inside pl-2">
+                        {(vm.networks || []).map((net, i) => <li key={i}>{net}</li>)}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
     const [step, setStep] = useState(1);
     const [vcenterInventory, setVcenterInventory] = useState(null);
+    const [vcenterCreds, setVcenterCreds] = useState({ url: '', username: '', password: '' });
+    const [isConnected, setIsConnected] = useState(false);
+    const [isConnecting, setIsConnecting] = useState(false);
+    const [connectionError, setConnectionError] = useState('');
     const [selectedVms, setSelectedVms] = useState([]);
+    const [currentlySelectedVm, setCurrentlySelectedVm] = useState(null);
     const [planName, setPlanName] = useState('');
     const [targetNamespace, setTargetNamespace] = useState('');
     const [newNamespace, setNewNamespace] = useState('');
@@ -240,12 +298,30 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
             .catch(err => console.error("Failed to fetch namespaces:", err));
     };
 
+    const handleConnect = async () => {
+        setIsConnecting(true);
+        setConnectionError('');
+        try {
+            const response = await fetch('/api/v1/vcenter/connect', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(vcenterCreds),
+            });
+            if (!response.ok) {
+                const errText = await response.text();
+                throw new Error(`Connection failed: ${errText}`);
+            }
+            const data = await response.json();
+            setVcenterInventory(data);
+            setIsConnected(true);
+        } catch (error) {
+            setConnectionError(error.message);
+        } finally {
+            setIsConnecting(false);
+        }
+    };
+
     useEffect(() => {
-        fetch('/api/v1/vcenter/connect', { method: 'POST' })
-            .then(res => res.json())
-            .then(data => setVcenterInventory(data))
-            .catch(err => console.error("Failed to fetch vCenter inventory:", err));
-        
         fetchNamespaces();
         fetch('/api/v1/harvester/vlanconfigs').then(res => res.json()).then(data => setHarvesterNetworks(data.map(net => net.metadata.name)));
         fetch('/api/v1/harvester/storageclasses').then(res => res.json()).then(data => setStorageClasses(data.map(sc => sc.metadata.name)));
@@ -307,14 +383,40 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
             case 1:
                 return (
                     <div>
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">Select Virtual Machines</h3>
-                        <p className="text-sm text-gray-600 mb-4">Select the VMs from your vCenter inventory to migrate.</p>
-                        <div className="border border-gray-200 rounded-md p-2 h-96 overflow-y-auto bg-white">
-                            {vcenterInventory ? <InventoryTree node={vcenterInventory} selectedVms={selectedVms} onVmToggle={handleVmToggle} /> : <p>Loading inventory...</p>}
-                        </div>
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">Connect to vCenter & Select VMs</h3>
+                        {!isConnected ? (
+                            <div className="space-y-4 p-4 border rounded-md bg-gray-50">
+                                <p className="text-sm text-gray-600">Enter your vCenter credentials to browse the inventory.</p>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">vCenter Address</label>
+                                    <input type="text" placeholder="vcenter.your-domain.com" value={vcenterCreds.url} onChange={e => setVcenterCreds({...vcenterCreds, url: e.target.value})} className="mt-1 block w-full form-input" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Username</label>
+                                    <input type="text" placeholder="administrator@vsphere.local" value={vcenterCreds.username} onChange={e => setVcenterCreds({...vcenterCreds, username: e.target.value})} className="mt-1 block w-full form-input" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Password</label>
+                                    <input type="password" value={vcenterCreds.password} onChange={e => setVcenterCreds({...vcenterCreds, password: e.target.value})} className="mt-1 block w-full form-input" />
+                                </div>
+                                <button onClick={handleConnect} disabled={isConnecting} className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50">
+                                    {isConnecting ? <Loader className="animate-spin" /> : 'Connect'}
+                                </button>
+                                {connectionError && <p className="text-sm text-red-600 mt-2">{connectionError}</p>}
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="border border-gray-200 rounded-md p-2 h-96 overflow-y-auto bg-white">
+                                    {vcenterInventory ? <InventoryTree node={vcenterInventory} selectedVms={selectedVms} onVmToggle={handleVmToggle} onVmSelect={setCurrentlySelectedVm} currentlySelectedVm={currentlySelectedVm}/> : <p>Loading inventory...</p>}
+                                </div>
+                                <VmDetailsPanel vm={currentlySelectedVm} />
+                            </div>
+                        )}
+                         <p className="text-sm text-gray-600 mt-2">{selectedVms.length} VM(s) selected for migration.</p>
                     </div>
                 );
             case 2:
+                // ... (rest of the cases remain the same)
                 return (
                     <div>
                         <h3 className="text-lg font-medium text-gray-900 mb-2">Configuration</h3>
@@ -410,7 +512,6 @@ export default function App() {
     };
 
     const handleViewDetails = (plan) => {
-        // In a real app, this would fetch from /api/v1/plans/{plan.id}
         const detailedPlan = {
             ...plan,
             vms: Array.from({ length: plan.vms }, (_, i) => ({

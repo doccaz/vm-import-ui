@@ -10,11 +10,19 @@ import (
 
 func main() {
 	log.SetFormatter(&log.JSONFormatter{})
-	log.Info("Starting VM Import UI Backend v0.3.2")
 
-	clientset, err := NewK8sClient()
+	// Set log level from environment variable
+	logLevel, err := log.ParseLevel(os.Getenv("LOG_LEVEL"))
 	if err != nil {
-		log.Fatalf("Failed to create Kubernetes client: %v", err)
+		logLevel = log.InfoLevel
+	}
+	log.SetLevel(logLevel)
+
+	log.Info("Starting VM Import UI Backend v0.4.6")
+
+	k8sClients, err := NewK8sClients()
+	if err != nil && os.Getenv("USE_MOCK_DATA") != "true" {
+		log.Fatalf("Failed to create Kubernetes clients: %v", err)
 	}
 
 	router := mux.NewRouter()
@@ -22,15 +30,15 @@ func main() {
 
 	// API Handlers
 	api.HandleFunc("/vcenter/connect", HandleVcenterConnect).Methods("POST")
-	api.HandleFunc("/plans", CreatePlanHandler(clientset)).Methods("POST")
-	api.HandleFunc("/plans", ListPlansHandler(clientset)).Methods("GET")
-	api.HandleFunc("/plans/{id}", GetPlanHandler(clientset)).Methods("GET")
+	api.HandleFunc("/plans", CreatePlanHandler(k8sClients)).Methods("POST")
+	api.HandleFunc("/plans", ListPlansHandler(k8sClients)).Methods("GET")
+	api.HandleFunc("/plans/{id}", GetPlanHandler(k8sClients)).Methods("GET")
 
 	// Harvester Resource Handlers
-	api.HandleFunc("/harvester/namespaces", ListNamespacesHandler(clientset)).Methods("GET")
-	api.HandleFunc("/harvester/namespaces", CreateNamespaceHandler(clientset)).Methods("POST")
-	api.HandleFunc("/harvester/vlanconfigs", ListVlanConfigsHandler(clientset)).Methods("GET")
-	api.HandleFunc("/harvester/storageclasses", ListStorageClassesHandler(clientset)).Methods("GET")
+	api.HandleFunc("/harvester/namespaces", ListNamespacesHandler(k8sClients)).Methods("GET")
+	api.HandleFunc("/harvester/namespaces", CreateNamespaceHandler(k8sClients)).Methods("POST")
+	api.HandleFunc("/harvester/vlanconfigs", ListVlanConfigsHandler(k8sClients)).Methods("GET")
+	api.HandleFunc("/harvester/storageclasses", ListStorageClassesHandler(k8sClients)).Methods("GET")
 
 	// Serve the frontend
 	uiPath := "/ui"

@@ -4,20 +4,46 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"os"
 
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-func HandleVcenterConnect(w http.ResponseWriter, r *http.Request) {
-	log.Info("Proxying request to vCenter")
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(mockVcenterInventory)
+type VCenterCredentials struct {
+	URL      string `json:"url"`
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
-func CreatePlanHandler(clientset *kubernetes.Clientset) http.HandlerFunc {
+func HandleVcenterConnect(w http.ResponseWriter, r *http.Request) {
+	if os.Getenv("USE_MOCK_DATA") == "true" {
+		log.Info("Using mock data for vCenter connection")
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(mockVcenterInventory)
+		return
+	}
+
+	var creds VCenterCredentials
+	if err := json.NewDecoder(r.Body).Decode(&creds); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	inventory, err := GetVCenterInventory(r.Context(), creds)
+	if err != nil {
+		log.Errorf("Failed to get vCenter inventory: %v", err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(inventory)
+}
+
+func CreatePlanHandler(clients *K8sClients) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Info("Creating VirtualMachineImport CR")
 		w.WriteHeader(http.StatusCreated)
@@ -25,25 +51,38 @@ func CreatePlanHandler(clientset *kubernetes.Clientset) http.HandlerFunc {
 	}
 }
 
-func ListPlansHandler(clientset *kubernetes.Clientset) http.HandlerFunc {
+func ListPlansHandler(clients *K8sClients) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		log.Info("Listing VirtualMachineImport CRs")
+		if os.Getenv("USE_MOCK_DATA") == "true" {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(mockPlans)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(mockPlans)
+		json.NewEncoder(w).Encode([]map[string]interface{}{})
 	}
 }
 
-func GetPlanHandler(clientset *kubernetes.Clientset) http.HandlerFunc {
+func GetPlanHandler(clients *K8sClients) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		log.Info("Getting details for a VirtualMachineImport CR")
+		if os.Getenv("USE_MOCK_DATA") == "true" {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(mockPlanDetails)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(mockPlanDetails)
+		json.NewEncoder(w).Encode(map[string]interface{}{})
 	}
 }
 
-func ListNamespacesHandler(clientset *kubernetes.Clientset) http.HandlerFunc {
+func ListNamespacesHandler(clients *K8sClients) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		namespaces, err := clientset.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
+		if os.Getenv("USE_MOCK_DATA") == "true" {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(mockNamespaces)
+			return
+		}
+		namespaces, err := clients.Clientset.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -53,7 +92,7 @@ func ListNamespacesHandler(clientset *kubernetes.Clientset) http.HandlerFunc {
 	}
 }
 
-func CreateNamespaceHandler(clientset *kubernetes.Clientset) http.HandlerFunc {
+func CreateNamespaceHandler(clients *K8sClients) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var payload struct {
 			Name string `json:"name"`
@@ -62,14 +101,10 @@ func CreateNamespaceHandler(clientset *kubernetes.Clientset) http.HandlerFunc {
 			http.Error(w, "Invalid request body", http.StatusBadRequest)
 			return
 		}
-		if payload.Name == "" {
-			http.Error(w, "Namespace name cannot be empty", http.StatusBadRequest)
-			return
-		}
 
 		log.Infof("Creating namespace: %s", payload.Name)
 		nsSpec := &v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: payload.Name}}
-		_, err := clientset.CoreV1().Namespaces().Create(context.TODO(), nsSpec, metav1.CreateOptions{})
+		_, err := clients.Clientset.CoreV1().Namespaces().Create(context.TODO(), nsSpec, metav1.CreateOptions{})
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -80,17 +115,38 @@ func CreateNamespaceHandler(clientset *kubernetes.Clientset) http.HandlerFunc {
 	}
 }
 
-func ListVlanConfigsHandler(clientset *kubernetes.Clientset) http.HandlerFunc {
+func ListVlanConfigsHandler(clients *K8sClients) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if os.Getenv("USE_MOCK_DATA") == "true" {
+			log.Info("Using mock data for VLAN configs")
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(mockHarvesterNetworks)
+			return
+		}
+
 		log.Info("Listing Harvester VlanConfigs")
+		gvr := schema.GroupVersionResource{
+			Group:    "network.harvesterhci.io",
+			Version:  "v1beta1",
+			Resource: "vlanconfigs",
+		}
+
+		list, err := clients.Dynamic.Resource(gvr).List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		log.Debugf("Fetched VLAN configs: %+v", list.Items)
+
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(mockHarvesterNetworks)
+		json.NewEncoder(w).Encode(list.Items)
 	}
 }
 
-func ListStorageClassesHandler(clientset *kubernetes.Clientset) http.HandlerFunc {
+func ListStorageClassesHandler(clients *K8sClients) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		scs, err := clientset.StorageV1().StorageClasses().List(context.TODO(), metav1.ListOptions{})
+		scs, err := clients.Clientset.StorageV1().StorageClasses().List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

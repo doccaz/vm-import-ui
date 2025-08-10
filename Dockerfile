@@ -7,7 +7,7 @@ COPY frontend/ ./
 RUN yarn build
 
 # Stage 2: Build the Go backend
-FROM golang:1.20 AS go-builder
+FROM golang:1.21 AS go-builder
 WORKDIR /go/src/app
 
 # Copy the module file first
@@ -31,4 +31,4 @@ COPY --from=go-builder /go/bin/vm-import-ui /
 COPY --from=builder /app/build /ui
 EXPOSE 8080
 USER nonroot:nonroot
-ENTRYPOINT ["/vm-import-ui"]
+ENTRYPOINT ["/vm-import-ui"]s

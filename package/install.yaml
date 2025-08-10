@@ -61,9 +61,14 @@ spec:
       serviceAccountName: vm-import-ui-sa
       containers:
       - name: vm-import-ui
-        image: your-docker-registry/vm-import-ui:0.3.2
+        image: your-docker-registry/vm-import-ui:0.4.6
         ports:
         - containerPort: 8080
+        env:
+        - name: USE_MOCK_DATA
+          value: "false"
+        - name: LOG_LEVEL
+          value: "info" # Change to "debug" for verbose logging
 ---
 apiVersion: v1
 kind: Service

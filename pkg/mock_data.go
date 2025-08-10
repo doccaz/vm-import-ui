@@ -1,13 +1,10 @@
 package main
 
 var mockVcenterInventory = map[string]interface{}{
-	"name": "Datacenter-Main", "type": "datacenter", "children": []map[string]interface{}{
-		{"name": "Cluster-Production", "type": "cluster", "children": []map[string]interface{}{
-			{"name": "Web Servers", "type": "folder", "children": []map[string]interface{}{
-				{"name": "web-vm-01", "type": "vm", "networks": []string{"VM Network"}, "disks": 2, "diskSizeGB": 50},
-				{"name": "web-vm-02", "type": "vm", "networks": []string{"VM Network", "VLAN-101"}, "disks": 1, "diskSizeGB": 40},
-			}},
-			{"name": "db-vm-prod-01", "type": "vm", "networks": []string{"DB-Network-Private"}, "disks": 3, "diskSizeGB": 200},
+	"name": "Mock-Datacenter", "type": "datacenter", "children": []map[string]interface{}{
+		{"name": "Mock-Cluster", "type": "cluster", "children": []map[string]interface{}{
+			{"name": "Mock-VM-01", "type": "VirtualMachine", "networks": []string{"Mock-Network"}, "disks": 1, "diskSizeGB": 50, "cpu": 2, "memoryMB": 4096},
+			{"name": "Mock-VM-02", "type": "VirtualMachine", "networks": []string{"Mock-Network"}, "disks": 2, "diskSizeGB": 100, "cpu": 4, "memoryMB": 8192},
 		}},
 	},
 }
@@ -15,7 +12,6 @@ var mockVcenterInventory = map[string]interface{}{
 var mockHarvesterNetworks = []map[string]interface{}{
 	{"metadata": map[string]interface{}{"name": "vlan-100-prod"}},
 	{"metadata": map[string]interface{}{"name": "vlan-250-dmz"}},
-	{"metadata": map[string]interface{}{"name": "storage-backend-net"}},
 }
 
 var mockPlans = []map[string]interface{}{
@@ -24,10 +20,13 @@ var mockPlans = []map[string]interface{}{
 }
 
 var mockPlanDetails = map[string]interface{}{
-	"id":     "plan-2",
-	"name":   "Import DBs",
-	"status": "In Progress",
+	"id": "plan-2", "name": "Import DBs", "status": "In Progress",
 	"vms": []map[string]interface{}{
 		{"name": "db-vm-prod-01", "status": "Queued", "progress": 0, "diskSizeGB": 200},
 	},
+}
+
+var mockNamespaces = []map[string]interface{}{
+	{"metadata": map[string]interface{}{"name": "default"}},
+	{"metadata": map[string]interface{}{"name": "kube-system"}},
 }
