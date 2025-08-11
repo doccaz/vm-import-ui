@@ -16,6 +16,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"sigs.k8s.io/yaml"
 )
 
 var (
@@ -451,5 +452,32 @@ func HandleGetPlanLogs(clients *K8sClients) http.HandlerFunc {
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(relevantLogs.String()))
+	}
+}
+
+func HandleGetPlanYAML(clients *K8sClients) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		namespace := vars["namespace"]
+		name := vars["name"]
+
+		log.Infof("Fetching YAML for plan %s/%s", namespace, name)
+
+		item, err := clients.Dynamic.Resource(vmiGVR).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		// Convert unstructured object to YAML
+		yamlBytes, err := yaml.Marshal(item.Object)
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Failed to marshal plan to YAML: "+err.Error())
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/yaml")
+		w.WriteHeader(http.StatusOK)
+		w.Write(yamlBytes)
 	}
 }

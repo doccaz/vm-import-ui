@@ -189,11 +189,12 @@ const PlanDetails = ({ plan, onClose }) => {
     const [localPlan, setLocalPlan] = useState(plan);
     const [startTime] = useState(Date.now());
     const [logs, setLogs] = useState('');
-    const [showLogs, setShowLogs] = useState(false);
-    const [isLoadingLogs, setIsLoadingLogs] = useState(false);
+    const [yamlContent, setYamlContent] = useState('');
+    const [showDebug, setShowDebug] = useState(null); // 'logs' or 'yaml'
+    const [isLoadingDebug, setIsLoadingDebug] = useState(false);
 
     const fetchLogs = async () => {
-        setIsLoadingLogs(true);
+        setIsLoadingDebug(true);
         try {
             const response = await fetch(`/api/v1/plans/${plan.metadata.namespace}/${plan.metadata.name}/logs`);
             const data = await response.text();
@@ -201,13 +202,34 @@ const PlanDetails = ({ plan, onClose }) => {
         } catch (err) {
             setLogs("Failed to fetch logs.");
         } finally {
-            setIsLoadingLogs(false);
+            setIsLoadingDebug(false);
+        }
+    };
+    
+    const fetchYaml = async () => {
+        setIsLoadingDebug(true);
+        try {
+            const response = await fetch(`/api/v1/plans/${plan.metadata.namespace}/${plan.metadata.name}/yaml`);
+            const data = await response.text();
+            setYamlContent(data || "Could not generate YAML.");
+        } catch (err) {
+            setYamlContent("Failed to fetch YAML.");
+        } finally {
+            setIsLoadingDebug(false);
         }
     };
 
-    const handleShowLogs = () => {
-        setShowLogs(true);
-        fetchLogs();
+    const handleShowDebug = (type) => {
+        if (showDebug === type) {
+            setShowDebug(null); // Toggle off
+            return;
+        }
+        setShowDebug(type);
+        if (type === 'logs') {
+            fetchLogs();
+        } else if (type === 'yaml') {
+            fetchYaml();
+        }
     };
 
     useEffect(() => {
@@ -310,12 +332,25 @@ const PlanDetails = ({ plan, onClose }) => {
                         </div>
                     </div>
                     <div>
-                        <button onClick={handleShowLogs} className="text-sm text-blue-600 hover:underline">
-                            Show Debug Logs
-                        </button>
-                        {showLogs && (
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">Plan Summary</h3>
+                        <div className="p-3 bg-gray-50 rounded-md border text-sm space-y-1">
+                            <p><strong>VM Name:</strong> {plan.spec?.virtualMachineName || 'N/A'}</p>
+                            <p><strong>Source:</strong> {plan.spec?.sourceCluster?.namespace}/{plan.spec?.sourceCluster?.name || 'N/A'}</p>
+                            <p><strong>Storage Class:</strong> {plan.spec?.storageClass || 'N/A'}</p>
+                        </div>
+                    </div>
+                    <div>
+                        <div className="flex space-x-2">
+                            <button onClick={() => handleShowDebug('logs')} className="text-sm text-blue-600 hover:underline">
+                                {showDebug === 'logs' ? 'Hide' : 'Show'} Debug Logs
+                            </button>
+                            <button onClick={() => handleShowDebug('yaml')} className="text-sm text-blue-600 hover:underline">
+                                {showDebug === 'yaml' ? 'Hide' : 'View'} YAML
+                            </button>
+                        </div>
+                        {showDebug && (
                             <div className="mt-2 p-2 border rounded-md bg-gray-900 text-white font-mono text-xs max-h-48 overflow-y-auto">
-                                <pre>{isLoadingLogs ? 'Loading...' : logs}</pre>
+                                <pre>{isLoadingDebug ? 'Loading...' : (showDebug === 'logs' ? logs : yamlContent)}</pre>
                             </div>
                         )}
                     </div>
