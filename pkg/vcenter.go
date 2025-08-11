@@ -1,3 +1,4 @@
+// pkg/vcenter.go
 package main
 
 import (
@@ -25,10 +26,11 @@ type InventoryNode struct {
 
 // GetVCenterInventory connects to vCenter and returns the inventory tree.
 func GetVCenterInventory(ctx context.Context, creds VCenterCredentials) (*InventoryNode, error) {
-	u, err := url.Parse("https://" + creds.Username + ":" + creds.Password + "@" + creds.URL + "/sdk")
+	u, err := url.Parse(creds.URL)
 	if err != nil {
 		return nil, err
 	}
+	u.User = url.UserPassword(creds.Username, creds.Password)
 
 	log.Infof("Connecting to vCenter at %s", creds.URL)
 	c, err := govmomi.NewClient(ctx, u, true)

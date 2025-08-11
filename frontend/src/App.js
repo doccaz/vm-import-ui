@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, ChevronRight, Server, Folder, Cloud, HardDrive, ArrowRight, X, Loader, CheckCircle, Clock, Cpu, MemoryStick } from 'lucide-react';
+import { Plus, ChevronRight, Server, Folder, Cloud, HardDrive, ArrowRight, X, Loader, CheckCircle, Clock, Cpu, MemoryStick, Trash2, Play, Edit, AlertTriangle } from 'lucide-react';
 
 // --- Helper Functions ---
 const formatBytes = (bytes, decimals = 2) => {
@@ -37,43 +37,183 @@ const Header = ({ title, onButtonClick }) => (
     </div>
 );
 
-const ResourceTable = ({ plans, onViewDetails }) => (
+const getPlanStatus = (plan) => {
+    if (plan.status?.importStatus) {
+        return plan.status.importStatus;
+    }
+    if (plan.status?.conditions?.[0]?.type) {
+        return plan.status.conditions[0].type;
+    }
+    return 'Pending';
+};
+
+const ResourceTable = ({ plans, onViewDetails, onRunNow, onDelete }) => (
     <div className="bg-white shadow-md rounded-lg overflow-hidden">
         <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
                 <tr>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">VMs</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">VM Name</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Target Namespace</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scheduled At</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
                 </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-                {plans.map(plan => (
-                    <tr key={plan.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{plan.name}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{plan.status}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{plan.vms}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{plan.target}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <button onClick={() => onViewDetails(plan)} className="text-blue-600 hover:text-blue-800">View Details</button>
-                        </td>
+                {plans.length === 0 ? (
+                    <tr>
+                        <td colSpan="6" className="px-6 py-4 text-center text-sm text-gray-500">No migration plans found.</td>
                     </tr>
-                ))}
+                ) : (
+                    plans.map(plan => (
+                        <tr key={plan.metadata.uid} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{plan.metadata.name}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{getPlanStatus(plan)}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{plan.spec.virtualMachineName}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{plan.metadata.namespace}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{plan.spec.schedule ? new Date(plan.spec.schedule).toLocaleString() : 'Not Scheduled'}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                                <button onClick={() => onRunNow(plan)} title="Run Now" className="text-green-600 hover:text-green-800"><Play size={18}/></button>
+                                <button onClick={() => {}} title="Edit" className="text-gray-600 hover:text-gray-800 cursor-not-allowed"><Edit size={18}/></button>
+                                <button onClick={() => onDelete(plan)} title="Delete" className="text-red-600 hover:text-red-800"><Trash2 size={18}/></button>
+                                <button onClick={() => onViewDetails(plan)} className="text-blue-600 hover:text-blue-800">Details</button>
+                            </td>
+                        </tr>
+                    ))
+                )}
             </tbody>
         </table>
     </div>
 );
 
+const SourcesTable = ({ sources, onEdit, onDelete }) => (
+    <div className="bg-white shadow-md rounded-lg overflow-hidden">
+        <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+                <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Namespace</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Endpoint</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
+                </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+                {sources.length === 0 ? (
+                    <tr>
+                        <td colSpan="4" className="px-6 py-4 text-center text-sm text-gray-500">No vCenter sources found.</td>
+                    </tr>
+                ) : (
+                    sources.map(source => (
+                        <tr key={source.metadata.uid} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{source.metadata.name}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{source.metadata.namespace}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{source.spec.endpoint}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                                <button onClick={() => onEdit(source)} title="Edit" className="text-blue-600 hover:text-blue-800"><Edit size={18}/></button>
+                                <button onClick={() => onDelete(source)} title="Delete" className="text-red-600 hover:text-red-800"><Trash2 size={18}/></button>
+                            </td>
+                        </tr>
+                    ))
+                )}
+            </tbody>
+        </table>
+    </div>
+);
+
+const SourceWizard = ({ onCancel, onSave, source }) => {
+    const [name, setName] = useState('');
+    const [namespace, setNamespace] = useState('default');
+    const [endpoint, setEndpoint] = useState('');
+    const [datacenter, setDatacenter] = useState('');
+    const [username, setUsername] = useState('');
+    const [password, setPassword] = useState('');
+    const isEditMode = !!source;
+
+    useEffect(() => {
+        if (isEditMode) {
+            setName(source.metadata.name);
+            setNamespace(source.metadata.namespace);
+            setEndpoint(source.spec.endpoint);
+            setDatacenter(source.spec.dc);
+        }
+    }, [source, isEditMode]);
+
+    const handleSubmit = () => {
+        const payload = { name, namespace, endpoint, datacenter, username, password };
+        onSave(payload, isEditMode);
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 z-50">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-lg">
+                <div className="p-4 border-b">
+                    <h2 className="text-xl font-semibold">{isEditMode ? 'Edit' : 'Create'} vCenter Source</h2>
+                </div>
+                <div className="p-6 space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Name</label>
+                        <input type="text" value={name} onChange={e => setName(e.target.value)} disabled={isEditMode} className="mt-1 block w-full form-input disabled:bg-gray-200" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Namespace</label>
+                        <input type="text" value={namespace} onChange={e => setNamespace(e.target.value)} disabled={isEditMode} className="mt-1 block w-full form-input disabled:bg-gray-200" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">vCenter Endpoint URL</label>
+                        <input type="text" placeholder="https://vcenter.your-domain.com/sdk" value={endpoint} onChange={e => setEndpoint(e.target.value)} className="mt-1 block w-full form-input" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Datacenter Name</label>
+                        <input type="text" value={datacenter} onChange={e => setDatacenter(e.target.value)} className="mt-1 block w-full form-input" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Username</label>
+                        <input type="text" value={username} onChange={e => setUsername(e.target.value)} className="mt-1 block w-full form-input" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Password</label>
+                        <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="mt-1 block w-full form-input" placeholder={isEditMode ? "Leave blank to keep existing password" : ""} />
+                    </div>
+                </div>
+                <div className="p-4 border-t flex justify-end space-x-2">
+                    <button onClick={onCancel} className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-md">Cancel</button>
+                    <button onClick={handleSubmit} className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-md">Save</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const PlanDetails = ({ plan, onClose }) => {
     const [localPlan, setLocalPlan] = useState(plan);
     const [startTime] = useState(Date.now());
+    const [logs, setLogs] = useState('');
+    const [showLogs, setShowLogs] = useState(false);
+    const [isLoadingLogs, setIsLoadingLogs] = useState(false);
+
+    const fetchLogs = async () => {
+        setIsLoadingLogs(true);
+        try {
+            const response = await fetch(`/api/v1/plans/${plan.metadata.namespace}/${plan.metadata.name}/logs`);
+            const data = await response.text();
+            setLogs(data || "No relevant logs found.");
+        } catch (err) {
+            setLogs("Failed to fetch logs.");
+        } finally {
+            setIsLoadingLogs(false);
+        }
+    };
+
+    const handleShowLogs = () => {
+        setShowLogs(true);
+        fetchLogs();
+    };
 
     useEffect(() => {
         const interval = setInterval(() => {
             setLocalPlan(currentPlan => {
-                if (currentPlan.status !== 'In Progress') return currentPlan;
+                if (getPlanStatus(currentPlan) !== 'In Progress') return currentPlan;
 
                 const updatedVms = currentPlan.vms.map(vm => {
                     if (vm.status === 'Completed' || vm.status === 'Failed') return vm;
@@ -91,7 +231,7 @@ const PlanDetails = ({ plan, onClose }) => {
                 const allDone = updatedVms.every(vm => vm.status === 'Completed' || vm.status === 'Failed');
                 const newPlanStatus = allDone ? 'Completed' : 'In Progress';
 
-                return { ...currentPlan, vms: updatedVms, status: newPlanStatus };
+                return { ...currentPlan, status: { ...currentPlan.status, importStatus: newPlanStatus }, vms: updatedVms };
             });
         }, 1000);
 
@@ -123,6 +263,7 @@ const PlanDetails = ({ plan, onClose }) => {
             case 'Copying Disks': return <Loader className="animate-spin text-blue-500" />;
             case 'Scheduled':
             case 'Queued': return <Clock className="text-gray-500" />;
+            case 'virtualMachineImportInvalid': return <AlertTriangle className="text-red-500" />;
             default: return null;
         }
     };
@@ -145,7 +286,7 @@ const PlanDetails = ({ plan, onClose }) => {
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm mt-2 text-gray-600">
                             <span>{formatBytes(overallStats.transferred)} / {formatBytes(overallStats.totalSize)}</span>
                             <span className="font-medium">{formatBytes(overallStats.speed)}/s</span>
-                            <span className="flex items-center gap-2">{getStatusIcon(localPlan.status)} {localPlan.status}</span>
+                            <span className="flex items-center gap-2">{getStatusIcon(getPlanStatus(localPlan))} {getPlanStatus(localPlan)}</span>
                             <span>ETA: {formatSeconds(overallStats.eta)}</span>
                         </div>
                     </div>
@@ -168,6 +309,16 @@ const PlanDetails = ({ plan, onClose }) => {
                             ))}
                         </div>
                     </div>
+                    <div>
+                        <button onClick={handleShowLogs} className="text-sm text-blue-600 hover:underline">
+                            Show Debug Logs
+                        </button>
+                        {showLogs && (
+                            <div className="mt-2 p-2 border rounded-md bg-gray-900 text-white font-mono text-xs max-h-48 overflow-y-auto">
+                                <pre>{isLoadingLogs ? 'Loading...' : logs}</pre>
+                            </div>
+                        )}
+                    </div>
                 </div>
                 <div className="p-4 border-t bg-gray-50 text-right rounded-b-lg">
                     <button onClick={onClose} className="bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 px-4 rounded-md">Close</button>
@@ -187,7 +338,7 @@ const VmIcon = ({ type }) => {
   }
 };
 
-const InventoryTree = ({ node, selectedVms, onVmToggle, onVmSelect, currentlySelectedVm, level = 0 }) => {
+const InventoryTree = ({ node, onVmSelect, currentlySelectedVm, level = 0 }) => {
     const [isOpen, setIsOpen] = useState(level < 2);
     const isParent = node.children && node.children.length > 0;
 
@@ -205,15 +356,6 @@ const InventoryTree = ({ node, selectedVms, onVmToggle, onVmSelect, currentlySel
                 className={`flex items-center p-2 rounded-md cursor-pointer ${currentlySelectedVm?.name === node.name ? 'bg-blue-100' : 'hover:bg-gray-100'}`}
                 onClick={handleNodeClick}
             >
-                {node.type === 'VirtualMachine' && (
-                    <input
-                        type="checkbox"
-                        className="form-checkbox h-4 w-4 text-blue-600 transition duration-150 ease-in-out mr-3"
-                        checked={selectedVms.some(vm => vm.name === node.name)}
-                        onChange={(e) => { e.stopPropagation(); onVmToggle(node); }}
-                        onClick={(e) => e.stopPropagation()} // Prevent row click from triggering when checkbox is clicked
-                    />
-                )}
                 {isParent && <ChevronRight size={16} className={`mr-1 transform transition-transform ${isOpen ? 'rotate-90' : ''}`} />}
                 <VmIcon type={node.type} />
                 <span className="ml-2 text-gray-800">{node.name}</span>
@@ -224,8 +366,6 @@ const InventoryTree = ({ node, selectedVms, onVmToggle, onVmSelect, currentlySel
                         <InventoryTree 
                             key={index} 
                             node={child} 
-                            selectedVms={selectedVms} 
-                            onVmToggle={onVmToggle}
                             onVmSelect={onVmSelect}
                             currentlySelectedVm={currentlySelectedVm}
                             level={level + 1} 
@@ -275,13 +415,12 @@ const VmDetailsPanel = ({ vm }) => {
 
 const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
     const [step, setStep] = useState(1);
+    const [vmwareSources, setVmwareSources] = useState([]);
+    const [selectedSource, setSelectedSource] = useState("");
     const [vcenterInventory, setVcenterInventory] = useState(null);
-    const [vcenterCreds, setVcenterCreds] = useState({ url: '', username: '', password: '' });
-    const [isConnected, setIsConnected] = useState(false);
     const [isConnecting, setIsConnecting] = useState(false);
     const [connectionError, setConnectionError] = useState('');
-    const [selectedVms, setSelectedVms] = useState([]);
-    const [currentlySelectedVm, setCurrentlySelectedVm] = useState(null);
+    const [selectedVm, setSelectedVm] = useState(null);
     const [planName, setPlanName] = useState('');
     const [targetNamespace, setTargetNamespace] = useState('');
     const [newNamespace, setNewNamespace] = useState('');
@@ -290,6 +429,8 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
     const [harvesterNetworks, setHarvesterNetworks] = useState([]);
     const [storageClass, setStorageClass] = useState('');
     const [storageClasses, setStorageClasses] = useState([]);
+    const [schedule, setSchedule] = useState('later');
+    const [scheduleDate, setScheduleDate] = useState('');
 
     const fetchNamespaces = () => {
         fetch('/api/v1/harvester/namespaces')
@@ -298,22 +439,35 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
             .catch(err => console.error("Failed to fetch namespaces:", err));
     };
 
-    const handleConnect = async () => {
+    useEffect(() => {
+        fetch('/api/v1/harvester/vmwaresources')
+            .then(res => res.json())
+            .then(data => setVmwareSources(data || []))
+            .catch(err => console.error("Failed to fetch VmwareSources:", err));
+        
+        fetchNamespaces();
+        fetch('/api/v1/harvester/vlanconfigs').then(res => res.json()).then(data => setHarvesterNetworks(data.map(net => net.metadata.name)));
+        fetch('/api/v1/harvester/storageclasses').then(res => res.json()).then(data => setStorageClasses(data.map(sc => sc.metadata.name)));
+    }, []);
+
+    const handleSourceChange = async (sourceIdentifier) => {
+        setSelectedSource(sourceIdentifier);
+        if (!sourceIdentifier) {
+            setVcenterInventory(null);
+            return;
+        }
+        
+        const [namespace, name] = sourceIdentifier.split('/');
         setIsConnecting(true);
         setConnectionError('');
         try {
-            const response = await fetch('/api/v1/vcenter/connect', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(vcenterCreds),
-            });
+            const response = await fetch(`/api/v1/vcenter/inventory/${namespace}/${name}`);
             if (!response.ok) {
-                const errText = await response.text();
-                throw new Error(`Connection failed: ${errText}`);
+                const errData = await response.json();
+                throw new Error(errData.error || "Failed to fetch inventory");
             }
             const data = await response.json();
             setVcenterInventory(data);
-            setIsConnected(true);
         } catch (error) {
             setConnectionError(error.message);
         } finally {
@@ -321,25 +475,10 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
         }
     };
 
-    useEffect(() => {
-        fetchNamespaces();
-        fetch('/api/v1/harvester/vlanconfigs').then(res => res.json()).then(data => setHarvesterNetworks(data.map(net => net.metadata.name)));
-        fetch('/api/v1/harvester/storageclasses').then(res => res.json()).then(data => setStorageClasses(data.map(sc => sc.metadata.name)));
-    }, []);
-
-    const handleVmToggle = (vm) => {
-        setSelectedVms(prev =>
-          prev.some(v => v.name === vm.name)
-            ? prev.filter(v => v.name !== vm.name)
-            : [...prev, vm]
-        );
-    };
-
     const sourceNetworks = React.useMemo(() => {
-        const nets = new Set();
-        selectedVms.forEach(vm => vm.networks.forEach(net => nets.add(net)));
-        return Array.from(nets);
-    }, [selectedVms]);
+        if (!selectedVm) return [];
+        return selectedVm.networks || [];
+    }, [selectedVm]);
 
     const handleCreateNamespace = async () => {
         if (!newNamespace) {
@@ -353,8 +492,8 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
                 body: JSON.stringify({ name: newNamespace }),
             });
             if (!response.ok) {
-                const err = await response.text();
-                throw new Error(`Failed to create namespace: ${err}`);
+                const err = await response.json();
+                throw new Error(`Failed to create namespace: ${err.error}`);
             }
             fetchNamespaces();
             setTargetNamespace(newNamespace);
@@ -374,8 +513,33 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
             if (!success) return;
             finalTargetNamespace = newNamespace;
         }
-        const totalSizeGB = selectedVms.reduce((acc, vm) => acc + (vm.diskSizeGB || 0), 0);
-        onCreatePlan({ name: planName, vms: selectedVms.length, status: 'Scheduled', target: finalTargetNamespace, totalSizeGB });
+        
+        const [sourceNamespace, sourceName] = selectedSource.split('/');
+        const plan = {
+            apiVersion: "migration.harvesterhci.io/v1beta1",
+            kind: "VirtualMachineImport",
+            metadata: {
+                name: planName.toLowerCase().replace(/\s+/g, '-'),
+                namespace: finalTargetNamespace,
+            },
+            spec: {
+                virtualMachineName: selectedVm.name,
+                sourceCluster: {
+                    name: sourceName,
+                    namespace: sourceNamespace,
+                    kind: "VmwareSource",
+                    apiVersion: "migration.harvesterhci.io/v1beta1",
+                },
+                storageClass: storageClass,
+                networkMapping: Object.entries(networkMappings).map(([key, value]) => ({
+                    sourceNetwork: key,
+                    destinationNetwork: `${finalTargetNamespace}/${value}`,
+                })),
+                schedule: schedule === 'now' ? null : (scheduleDate ? new Date(scheduleDate).toISOString() : null),
+            }
+        };
+
+        onCreatePlan(plan);
     };
 
     const renderStepContent = () => {
@@ -383,40 +547,36 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
             case 1:
                 return (
                     <div>
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">Connect to vCenter & Select VMs</h3>
-                        {!isConnected ? (
-                            <div className="space-y-4 p-4 border rounded-md bg-gray-50">
-                                <p className="text-sm text-gray-600">Enter your vCenter credentials to browse the inventory.</p>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">vCenter Address</label>
-                                    <input type="text" placeholder="vcenter.your-domain.com" value={vcenterCreds.url} onChange={e => setVcenterCreds({...vcenterCreds, url: e.target.value})} className="mt-1 block w-full form-input" />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Username</label>
-                                    <input type="text" placeholder="administrator@vsphere.local" value={vcenterCreds.username} onChange={e => setVcenterCreds({...vcenterCreds, username: e.target.value})} className="mt-1 block w-full form-input" />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Password</label>
-                                    <input type="password" value={vcenterCreds.password} onChange={e => setVcenterCreds({...vcenterCreds, password: e.target.value})} className="mt-1 block w-full form-input" />
-                                </div>
-                                <button onClick={handleConnect} disabled={isConnecting} className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50">
-                                    {isConnecting ? <Loader className="animate-spin" /> : 'Connect'}
-                                </button>
-                                {connectionError && <p className="text-sm text-red-600 mt-2">{connectionError}</p>}
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">Select vCenter Source & VM</h3>
+                        <div className="space-y-4 p-4 border rounded-md bg-gray-50">
+                             <div>
+                                <label className="block text-sm font-medium text-gray-700">vCenter Source</label>
+                                <select value={selectedSource} onChange={e => handleSourceChange(e.target.value)} className="mt-1 block w-full form-select">
+                                    <option value="">Select a source...</option>
+                                    {vmwareSources.map(source => (
+                                        <option key={source.metadata.uid} value={`${source.metadata.namespace}/${source.metadata.name}`}>
+                                            {source.metadata.namespace}/{source.metadata.name}
+                                        </option>
+                                    ))}
+                                </select>
                             </div>
-                        ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        </div>
+
+                        {isConnecting && <Loader className="animate-spin mt-4" />}
+                        {connectionError && <p className="text-sm text-red-600 mt-2">{connectionError}</p>}
+
+                        {vcenterInventory && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                                 <div className="border border-gray-200 rounded-md p-2 h-96 overflow-y-auto bg-white">
-                                    {vcenterInventory ? <InventoryTree node={vcenterInventory} selectedVms={selectedVms} onVmToggle={handleVmToggle} onVmSelect={setCurrentlySelectedVm} currentlySelectedVm={currentlySelectedVm}/> : <p>Loading inventory...</p>}
+                                    <InventoryTree node={vcenterInventory} onVmSelect={setSelectedVm} currentlySelectedVm={selectedVm}/>
                                 </div>
-                                <VmDetailsPanel vm={currentlySelectedVm} />
+                                <VmDetailsPanel vm={selectedVm} />
                             </div>
                         )}
-                         <p className="text-sm text-gray-600 mt-2">{selectedVms.length} VM(s) selected for migration.</p>
+                         <p className="text-sm text-gray-600 mt-2">{selectedVm ? '1 VM' : '0 VMs'} selected for migration.</p>
                     </div>
                 );
             case 2:
-                // ... (rest of the cases remain the same)
                 return (
                     <div>
                         <h3 className="text-lg font-medium text-gray-900 mb-2">Configuration</h3>
@@ -472,6 +632,52 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
                         </div>
                     </div>
                 );
+            case 4:
+                return (
+                    <div>
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">Schedule</h3>
+                        <p className="text-sm text-gray-600 mb-4">Choose when to run the migration plan.</p>
+                        <div className="space-y-2">
+                            <label className="flex items-center">
+                                <input type="radio" name="schedule" value="now" checked={schedule === 'now'} onChange={e => setSchedule(e.target.value)} className="form-radio" />
+                                <span className="ml-2">Run Immediately (creates an unscheduled plan)</span>
+                            </label>
+                            <label className="flex items-center">
+                                <input type="radio" name="schedule" value="later" checked={schedule === 'later'} onChange={e => setSchedule(e.target.value)} className="form-radio" />
+                                <span className="ml-2">Schedule for Later</span>
+                            </label>
+                        </div>
+                        {schedule === 'later' && (
+                            <div className="mt-4">
+                                <input type="datetime-local" value={scheduleDate} onChange={e => setScheduleDate(e.target.value)} className="mt-1 block w-full form-input" />
+                            </div>
+                        )}
+                    </div>
+                );
+            case 5:
+                return (
+                    <div>
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">Review Plan</h3>
+                        <div className="space-y-4 text-sm">
+                            <div><strong>Plan Name:</strong> {planName}</div>
+                            <div><strong>Target Namespace:</strong> {targetNamespace === 'create_new' ? `${newNamespace} (new)` : targetNamespace}</div>
+                            <div><strong>Storage Class:</strong> {storageClass}</div>
+                            <div><strong>Schedule:</strong> {schedule === 'now' ? 'Run Immediately' : (scheduleDate ? new Date(scheduleDate).toLocaleString() : 'Not Scheduled')}</div>
+                            <div>
+                                <h4 className="font-medium mt-2">VM to Migrate:</h4>
+                                <ul className="list-disc list-inside pl-4">
+                                    <li>{selectedVm?.name}</li>
+                                </ul>
+                            </div>
+                            <div>
+                                <h4 className="font-medium mt-2">Network Mappings:</h4>
+                                <ul className="list-disc list-inside pl-4">
+                                    {Object.entries(networkMappings).map(([key, value]) => <li key={key}>{key} &rarr; {value}</li>)}
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                );
             default: return null;
         }
     };
@@ -486,8 +692,8 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
                 <button onClick={onCancel} className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-md">Cancel</button>
                 <div>
                     {step > 1 && <button onClick={() => setStep(s => s - 1)} className="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-md mr-2">Back</button>}
-                    {step < 3 && <button onClick={() => setStep(s => s + 1)} className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-md">Next</button>}
-                    {step === 3 && <button onClick={handleSubmit} className="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-md">Create</button>}
+                    {step < 5 && <button onClick={() => setStep(s => s + 1)} className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-md">Next</button>}
+                    {step === 5 && <button onClick={handleSubmit} className="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-md">Create Plan</button>}
                 </div>
             </div>
         </div>
@@ -495,31 +701,148 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
 };
 
 export default function App() {
-    const [page, setPage] = useState('dashboard');
+    const [page, setPage] = useState('plans'); // 'plans', 'sources'
     const [plans, setPlans] = useState([]);
+    const [sources, setSources] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
     const [selectedPlan, setSelectedPlan] = useState(null);
+    const [planToDelete, setPlanToDelete] = useState(null);
+    const [planToRun, setPlanToRun] = useState(null);
+    const [sourceToEdit, setSourceToEdit] = useState(null);
+    const [sourceToDelete, setSourceToDelete] = useState(null);
+    const [showSourceWizard, setShowSourceWizard] = useState(false);
+
+    const fetchPlans = async () => {
+        setIsLoading(true);
+        try {
+            const response = await fetch('/api/v1/plans');
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error || "Failed to fetch plans");
+            }
+            const data = await response.json();
+            setPlans(data || []);
+        } catch (err) {
+            console.error("Failed to fetch plans:", err);
+            alert(`Error fetching plans: ${err.message}`);
+            setPlans([]); // Ensure plans is an array on error
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const fetchSources = async () => {
+        try {
+            const response = await fetch('/api/v1/harvester/vmwaresources');
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error || "Failed to fetch sources");
+            }
+            const data = await response.json();
+            setSources(data || []);
+        } catch (err) {
+            console.error("Failed to fetch sources:", err);
+            alert(`Error fetching sources: ${err.message}`);
+        }
+    };
 
     useEffect(() => {
-        fetch('/api/v1/plans')
-            .then(res => res.json())
-            .then(data => setPlans(data))
-            .catch(err => console.error("Failed to fetch plans:", err));
+        fetchPlans();
+        fetchSources();
     }, []);
 
-    const handleCreatePlan = (newPlan) => {
-        setPlans(prev => [...prev, { ...newPlan, id: `plan-${Date.now()}` }]);
-        setPage('dashboard');
+    const handleCreatePlan = async (planPayload) => {
+        try {
+            const response = await fetch('/api/v1/plans', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(planPayload),
+            });
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error || "Failed to create plan");
+            }
+            await response.json();
+            fetchPlans(); // Refresh the list
+            setPage('plans');
+        } catch (err) {
+            console.error("Failed to create plan:", err);
+            alert(`Error creating plan: ${err.message}`);
+        }
+    };
+
+    const handleDeletePlan = async () => {
+        if (!planToDelete) return;
+        try {
+            await fetch(`/api/v1/plans/${planToDelete.metadata.namespace}/${planToDelete.metadata.name}`, {
+                method: 'DELETE',
+            });
+            fetchPlans(); // Refresh the list
+            setPlanToDelete(null); // Close the modal
+        } catch (err) {
+            console.error("Failed to delete plan:", err);
+        }
+    };
+
+    const handleRunNow = async () => {
+        if (!planToRun) return;
+        try {
+            await fetch(`/api/v1/plans/${planToRun.metadata.namespace}/${planToRun.metadata.name}/run`, {
+                method: 'POST',
+            });
+            fetchPlans(); // Refresh the list
+            setPlanToRun(null);
+        } catch (err) {
+            console.error("Failed to run plan:", err);
+        }
+    };
+    
+    const handleSaveSource = async (payload, isEdit) => {
+        const url = isEdit ? `/api/v1/harvester/vmwaresources/${payload.namespace}/${payload.name}` : '/api/v1/harvester/vmwaresources';
+        const method = isEdit ? 'PUT' : 'POST';
+
+        try {
+            const response = await fetch(url, {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error || `Failed to ${isEdit ? 'update' : 'create'} source`);
+            }
+            fetchSources();
+            setShowSourceWizard(false);
+            setSourceToEdit(null);
+        } catch (err) {
+            console.error(`Failed to save source:`, err);
+            alert(`Error saving source: ${err.message}`);
+        }
+    };
+
+    const handleDeleteSource = async () => {
+        if (!sourceToDelete) return;
+        try {
+            await fetch(`/api/v1/harvester/vmwaresources/${sourceToDelete.metadata.namespace}/${sourceToDelete.metadata.name}`, {
+                method: 'DELETE',
+            });
+            fetchSources();
+            setSourceToDelete(null);
+        } catch (err) {
+            console.error("Failed to delete source:", err);
+        }
     };
 
     const handleViewDetails = (plan) => {
         const detailedPlan = {
             ...plan,
-            vms: Array.from({ length: plan.vms }, (_, i) => ({
-                name: `vm-in-plan-${plan.id}-${i+1}`,
-                status: plan.status === 'Completed' ? 'Completed' : 'Queued',
-                progress: plan.status === 'Completed' ? 100 : 0,
-                diskSizeGB: (plan.totalSizeGB || 50) / plan.vms,
-            }))
+            name: plan.metadata.name,
+            vms: [{
+                name: plan.spec.virtualMachineName,
+                status: getPlanStatus(plan),
+                progress: 0, // This would come from the status in a real scenario
+                diskSizeGB: 50, 
+            }]
         };
         setSelectedPlan(detailedPlan);
         setPage('planDetails');
@@ -527,16 +850,23 @@ export default function App() {
 
     const renderPage = () => {
         switch (page) {
-            case 'create':
-                return <CreatePlanWizard onCancel={() => setPage('dashboard')} onCreatePlan={handleCreatePlan} />;
+            case 'createPlan':
+                return <CreatePlanWizard onCancel={() => setPage('plans')} onCreatePlan={handleCreatePlan} />;
             case 'planDetails':
-                return <PlanDetails plan={selectedPlan} onClose={() => setPage('dashboard')} />;
-            case 'dashboard':
+                return <PlanDetails plan={selectedPlan} onClose={() => setPage('plans')} />;
+            case 'sources':
+                return (
+                    <div>
+                        <Header title="vCenter Sources" onButtonClick={() => { setSourceToEdit(null); setShowSourceWizard(true); }} />
+                        <SourcesTable sources={sources} onEdit={(source) => { setSourceToEdit(source); setShowSourceWizard(true); }} onDelete={setSourceToDelete} />
+                    </div>
+                );
+            case 'plans':
             default:
                 return (
                     <div>
-                        <Header title="VM Migration Plans" onButtonClick={() => setPage('create')} />
-                        <ResourceTable plans={plans} onViewDetails={handleViewDetails} />
+                        <Header title="VM Migration Plans" onButtonClick={() => setPage('createPlan')} />
+                        {isLoading ? <p>Loading plans...</p> : <ResourceTable plans={plans} onViewDetails={handleViewDetails} onRunNow={setPlanToRun} onDelete={setPlanToDelete} />}
                     </div>
                 );
         }
@@ -544,9 +874,52 @@ export default function App() {
 
     return (
         <div className="bg-gray-100 min-h-screen p-8 font-sans">
+             <nav className="mb-6 border-b">
+                <button onClick={() => setPage('plans')} className={`px-4 py-2 ${page === 'plans' ? 'border-b-2 border-blue-500' : ''}`}>Migration Plans</button>
+                <button onClick={() => setPage('sources')} className={`px-4 py-2 ${page === 'sources' ? 'border-b-2 border-blue-500' : ''}`}>vCenter Sources</button>
+            </nav>
             <div className="max-w-7xl mx-auto">
                 {renderPage()}
             </div>
+
+            {showSourceWizard && <SourceWizard onCancel={() => { setShowSourceWizard(false); setSourceToEdit(null); }} onSave={handleSaveSource} source={sourceToEdit} />}
+
+            {planToDelete && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 z-50">
+                    <div className="bg-white rounded-lg shadow-xl p-6">
+                        <h3 className="text-lg font-bold">Confirm Deletion</h3>
+                        <p className="my-4">Are you sure you want to delete the plan "{planToDelete.metadata.name}"?</p>
+                        <div className="flex justify-end space-x-4">
+                            <button onClick={() => setPlanToDelete(null)} className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-md">Cancel</button>
+                            <button onClick={handleDeletePlan} className="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-md">Delete</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {planToRun && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 z-50">
+                    <div className="bg-white rounded-lg shadow-xl p-6">
+                        <h3 className="text-lg font-bold">Confirm Run Now</h3>
+                        <p className="my-4">Are you sure you want to run the plan "{planToRun.metadata.name}" immediately? This will remove its schedule.</p>
+                        <div className="flex justify-end space-x-4">
+                            <button onClick={() => setPlanToRun(null)} className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-md">Cancel</button>
+                            <button onClick={handleRunNow} className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-md">Run Now</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+            {sourceToDelete && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 z-50">
+                    <div className="bg-white rounded-lg shadow-xl p-6">
+                        <h3 className="text-lg font-bold">Confirm Deletion</h3>
+                        <p className="my-4">Are you sure you want to delete the vCenter source "{sourceToDelete.metadata.name}"? This will also delete the associated credentials secret.</p>
+                        <div className="flex justify-end space-x-4">
+                            <button onClick={() => setSourceToDelete(null)} className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-md">Cancel</button>
+                            <button onClick={handleDeleteSource} className="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-md">Delete</button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

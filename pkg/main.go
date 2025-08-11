@@ -1,3 +1,4 @@
+// pkg/main.go
 package main
 
 import (
@@ -11,14 +12,13 @@ import (
 func main() {
 	log.SetFormatter(&log.JSONFormatter{})
 
-	// Set log level from environment variable
 	logLevel, err := log.ParseLevel(os.Getenv("LOG_LEVEL"))
 	if err != nil {
 		logLevel = log.InfoLevel
 	}
 	log.SetLevel(logLevel)
 
-	log.Info("Starting VM Import UI Backend v0.4.6")
+	log.Info("Starting VM Import UI Backend v0.6.3")
 
 	k8sClients, err := NewK8sClients()
 	if err != nil && os.Getenv("USE_MOCK_DATA") != "true" {
@@ -29,12 +29,18 @@ func main() {
 	api := router.PathPrefix("/api/v1").Subrouter()
 
 	// API Handlers
-	api.HandleFunc("/vcenter/connect", HandleVcenterConnect).Methods("POST")
+	api.HandleFunc("/vcenter/inventory/{namespace}/{name}", HandleGetInventory(k8sClients)).Methods("GET")
 	api.HandleFunc("/plans", CreatePlanHandler(k8sClients)).Methods("POST")
 	api.HandleFunc("/plans", ListPlansHandler(k8sClients)).Methods("GET")
-	api.HandleFunc("/plans/{id}", GetPlanHandler(k8sClients)).Methods("GET")
+	api.HandleFunc("/plans/{namespace}/{name}", DeletePlanHandler(k8sClients)).Methods("DELETE")
+	api.HandleFunc("/plans/{namespace}/{name}/run", RunPlanHandler(k8sClients)).Methods("POST")
+	api.HandleFunc("/plans/{namespace}/{name}/logs", HandleGetPlanLogs(k8sClients)).Methods("GET")
 
 	// Harvester Resource Handlers
+	api.HandleFunc("/harvester/vmwaresources", ListVmwareSourcesHandler(k8sClients)).Methods("GET")
+	api.HandleFunc("/harvester/vmwaresources", CreateVmwareSourceHandler(k8sClients)).Methods("POST")
+	api.HandleFunc("/harvester/vmwaresources/{namespace}/{name}", UpdateVmwareSourceHandler(k8sClients)).Methods("PUT")
+	api.HandleFunc("/harvester/vmwaresources/{namespace}/{name}", DeleteVmwareSourceHandler(k8sClients)).Methods("DELETE")
 	api.HandleFunc("/harvester/namespaces", ListNamespacesHandler(k8sClients)).Methods("GET")
 	api.HandleFunc("/harvester/namespaces", CreateNamespaceHandler(k8sClients)).Methods("POST")
 	api.HandleFunc("/harvester/vlanconfigs", ListVlanConfigsHandler(k8sClients)).Methods("GET")

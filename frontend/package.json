@@ -1,6 +1,6 @@
 {
   "name": "vm-import-ui-frontend",
-  "version": "0.4.5",
+  "version": "0.6.2",
   "private": true,
   "dependencies": {
     "@tailwindcss/forms": "^0.5.6",

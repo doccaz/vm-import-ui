@@ -1,3 +1,4 @@
+// pkg/k8s.go
 package main
 
 import (

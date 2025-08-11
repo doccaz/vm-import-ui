@@ -1,6 +1,7 @@
+// go.mod
 module github.com/doccaz/vm-import-ui
 
-go 1.21
+go 1.24
 
 require (
 	github.com/gorilla/mux v1.8.0
@@ -10,4 +11,3 @@ require (
 	k8s.io/apimachinery v0.28.0
 	k8s.io/client-go v0.28.0
 )
-// indirect dependencies will be added by `go mod tidy`

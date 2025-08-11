@@ -1,65 +1,78 @@
 # Harvester VM Import UI Add-on
+
 This add-on provides a user-friendly web interface for the Harvester VM Import Controller, allowing users to import virtual machines from vCenter into Harvester through a simple, wizard-driven process.
 
 # Features
-* Browse vCenter inventory (Datacenters, Clusters, Folders, VMs).
-* Select multiple VMs for migration.
-* Create migration plans to run immediately or schedule for later.
+* Manage vCenter sources directly from the UI (Create/Delete).
+* Select a pre-configured vCenter source to browse its inventory.Create and schedule migration plans for a specific date and time.
+* Manage plans: Run immediately, delete with confirmation.
 * Map source vCenter networks to target Harvester VLANs.
 * Select a target Harvester Namespace and StorageClass for imported VMs.
-* (Coming Soon) Progress indicators for migration tasks.
+# Prerequisites (CRITICAL)
+Before using the UI to create a migration plan, you must first create a vCenter Source. You can do this from the "vCenter Sources" tab in the UI itself. This will create the necessary Secret and VmwareSource resources in your Harvester cluster.Alternatively, you can create them manually:
+
+1. Create the Credentials Secret
+
+Create a file named vsphere-secret.yaml with your vCenter username and password.
+```
+apiVersion: v1
+kind: Secret
+metadata:
+  name: vsphere-credentials
+  namespace: default
+stringData:
+  "username": "your-vcenter-user"
+  "password": "your-vcenter-password"
+```
+
+Apply it to your cluster: 
+```
+kubectl apply -f vsphere-secret.yaml
+```
+2. Create the VmwareSource
+Create a file named vmware-source.yaml. This resource tells the import controller how to connect to your vCenter.
+```
+apiVersion: migration.harvesterhci.io/v1beta1
+kind: VmwareSource
+metadata:
+  name: my-vcenter
+  namespace: default
+spec:
+  endpoint: "https://your-vcenter-address/sdk"
+  dc: "Your-Datacenter-Name" # The name of the Datacenter in vCenter
+  credentials:
+    name: vsphere-credentials
+    namespace: default
+```
+
+Apply it to your cluster: 
+```
+kubectl apply -f vmware-source.yaml
+```
 
 # Building and Testing
-You can build and test this add-on both locally for development and by deploying it to a live Harvester cluster.
 
-Prerequisites
-* Go (version 1.21+)
-* Node.js (version 18+) and Yarn
-* Podman or Docker
-* Access to a Kubernetes cluster (a Harvester cluster is required for full functionality).
+Step 1: Build the Container ImageFrom the project's root directory, build the image using Podman or Docker.
 
-A configured kubeconfig file (~/.kube/config) for local testing.
-
-1. Local Development and Testing
-Running the add-on locally is the fastest way to test UI changes. The backend can either connect to your real cluster using your local kubeconfig or run with mock data.
-
-Step 1: Build the Container Image
-From the project's root directory, build the image using Podman or Docker.
-
-# Using Podman
+Using Podman
 ```
 podman build -t vm-import-ui:local .
 ```
 
-# OR Using Docker
-```
-docker build -t vm-import-ui:local .
-```
-
 Step 2: Run the Container
+
 Run the container, mapping port 8080 and mounting your local kubeconfig file.
 
-# Using Podman
+Using Podman
 ```
 podman run -p 8080:8080 -v ~/.kube/config:/kubeconfig:ro -e KUBECONFIG=/kubeconfig vm-import-ui:local
 ```
 
-# OR Using Docker
-```
-docker run -p 8080:8080 -v ~/.kube/config:/kubeconfig:ro -e KUBECONFIG=/kubeconfig vm-import-ui:local
-```
-The :ro flag mounts the kubeconfig as read-only for better security.
+Step 3: Enabling Debugging
 
-Step 3: Enabling Debugging and Mock Data
-You can control the backend's behavior with environment variables:
+To see verbose logs from the backend, set the LOG_LEVEL environment variable.
 
-Enable Verbose Logging: To see the full data payloads from vCenter and Harvester in the container logs, set the LOG_LEVEL to debug.
-
-Use Mock Data: To test the UI without a live connection, set USE_MOCK_DATA to true.
-
-Example (running with debug logging):
-
-# Using Podman
+Using Podman
 ```
 podman run -p 8080:8080 \
   -v ~/.kube/config:/kubeconfig:ro \
@@ -69,32 +82,6 @@ podman run -p 8080:8080 \
 ```
 
 Step 4: Access the UI
+
 Open your web browser and navigate to http://localhost:8080.
 
-2. Deploying to a Harvester Cluster
-To test the add-on in a real production environment, you need to push the image to a registry and install it in Harvester.
-
-Step 1: Push the Image to a Registry
-Tag your locally built image and push it to a container registry that your Harvester cluster can access.
-
-# Using Podman or Docker
-
-```
-podman tag vm-import-ui:local your-registry.com/your-repo/vm-import-ui:0.4.6
-podman push your-registry.com/your-repo/vm-import-ui:0.4.6
-```
-
-Step 2: Update the Deployment YAML
-In the package/install.yaml file, find the Deployment resource and update the image field.
-
-# In package/install.yaml
-```
-...
-      containers:
-      - name: vm-import-ui
-        image: your-registry.com/your-repo/vm-import-ui:0.4.6 # <-- UPDATE THIS LINE
-...
-```
-
-Step 3: Install the Add-on in Harvester
-Follow the official Harvester documentation for managing add-ons to install your custom add-on.

@@ -1,94 +1,348 @@
+// pkg/handlers.go
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
-	"os"
+	"strings"
 
+	"github.com/gorilla/mux"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-type VCenterCredentials struct {
-	URL      string `json:"url"`
-	Username string `json:"username"`
-	Password string `json:"password"`
+var (
+	vmiGVR = schema.GroupVersionResource{
+		Group:    "migration.harvesterhci.io",
+		Version:  "v1beta1",
+		Resource: "virtualmachineimports",
+	}
+	vmwareSourceGVR = schema.GroupVersionResource{
+		Group:    "migration.harvesterhci.io",
+		Version:  "v1beta1",
+		Resource: "vmwaresources",
+	}
+)
+
+// Helper to respond with JSON
+func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
+	response, _ := json.Marshal(payload)
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	w.Write(response)
 }
 
-func HandleVcenterConnect(w http.ResponseWriter, r *http.Request) {
-	if os.Getenv("USE_MOCK_DATA") == "true" {
-		log.Info("Using mock data for vCenter connection")
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(mockVcenterInventory)
-		return
-	}
+// Helper to respond with a JSON error
+func respondWithError(w http.ResponseWriter, code int, message string) {
+	respondWithJSON(w, code, map[string]string{"error": message})
+}
 
-	var creds VCenterCredentials
-	if err := json.NewDecoder(r.Body).Decode(&creds); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
+type VCenterCredentials struct {
+	URL      string
+	Username string
+	Password string
+}
 
-	inventory, err := GetVCenterInventory(r.Context(), creds)
-	if err != nil {
-		log.Errorf("Failed to get vCenter inventory: %v", err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+func HandleGetInventory(clients *K8sClients) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		namespace := vars["namespace"]
+		name := vars["name"]
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(inventory)
+		log.Infof("Fetching inventory for VmwareSource %s/%s", namespace, name)
+
+		sourceObj, err := clients.Dynamic.Resource(vmwareSourceGVR).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Failed to get VmwareSource: "+err.Error())
+			return
+		}
+
+		endpoint, _, _ := unstructured.NestedString(sourceObj.Object, "spec", "endpoint")
+
+		secretName, _, _ := unstructured.NestedString(sourceObj.Object, "spec", "credentials", "name")
+		secretNamespace, _, _ := unstructured.NestedString(sourceObj.Object, "spec", "credentials", "namespace")
+
+		secret, err := clients.Clientset.CoreV1().Secrets(secretNamespace).Get(context.TODO(), secretName, metav1.GetOptions{})
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Failed to get credentials secret: "+err.Error())
+			return
+		}
+
+		creds := VCenterCredentials{
+			URL:      endpoint,
+			Username: string(secret.Data["username"]),
+			Password: string(secret.Data["password"]),
+		}
+
+		inventory, err := GetVCenterInventory(r.Context(), creds)
+		if err != nil {
+			log.Errorf("Failed to get vCenter inventory: %v", err)
+			respondWithError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		respondWithJSON(w, http.StatusOK, inventory)
+	}
 }
 
 func CreatePlanHandler(clients *K8sClients) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		log.Info("Creating VirtualMachineImport CR")
-		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(map[string]string{"status": "plan submitted"})
+		var plan VirtualMachineImport
+		if err := json.NewDecoder(r.Body).Decode(&plan); err != nil {
+			respondWithError(w, http.StatusBadRequest, "Invalid request body")
+			return
+		}
+
+		log.Infof("Creating VirtualMachineImport CR: %s in namespace %s", plan.Name, plan.Namespace)
+		log.Debugf("Received plan payload: %+v", plan)
+
+		unstructuredObj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&plan)
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Failed to convert plan to unstructured object: "+err.Error())
+			return
+		}
+
+		createdObj, err := clients.Dynamic.Resource(vmiGVR).Namespace(plan.Namespace).Create(context.TODO(), &unstructured.Unstructured{Object: unstructuredObj}, metav1.CreateOptions{})
+		if err != nil {
+			log.Errorf("Failed to create VirtualMachineImport CR: %v", err)
+			respondWithError(w, http.StatusInternalServerError, "Failed to create VirtualMachineImport CR: "+err.Error())
+			return
+		}
+
+		respondWithJSON(w, http.StatusCreated, createdObj)
 	}
 }
 
 func ListPlansHandler(clients *K8sClients) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if os.Getenv("USE_MOCK_DATA") == "true" {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(mockPlans)
+		list, err := clients.Dynamic.Resource(vmiGVR).List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Failed to list VirtualMachineImport CRs: "+err.Error())
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode([]map[string]interface{}{})
+		respondWithJSON(w, http.StatusOK, list.Items)
 	}
 }
 
-func GetPlanHandler(clients *K8sClients) http.HandlerFunc {
+func DeletePlanHandler(clients *K8sClients) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if os.Getenv("USE_MOCK_DATA") == "true" {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(mockPlanDetails)
+		vars := mux.Vars(r)
+		namespace := vars["namespace"]
+		name := vars["name"]
+
+		log.Infof("Deleting VirtualMachineImport CR: %s in namespace %s", name, namespace)
+		err := clients.Dynamic.Resource(vmiGVR).Namespace(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{})
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]interface{}{})
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func RunPlanHandler(clients *K8sClients) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		namespace := vars["namespace"]
+		name := vars["name"]
+
+		log.Infof("Triggering 'Run Now' for VirtualMachineImport CR: %s in namespace %s", name, namespace)
+
+		item, err := clients.Dynamic.Resource(vmiGVR).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		unstructured.RemoveNestedField(item.Object, "spec", "schedule")
+
+		updatedItem, err := clients.Dynamic.Resource(vmiGVR).Namespace(namespace).Update(context.TODO(), item, metav1.UpdateOptions{})
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		respondWithJSON(w, http.StatusOK, updatedItem)
+	}
+}
+
+func ListVmwareSourcesHandler(clients *K8sClients) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		list, err := clients.Dynamic.Resource(vmwareSourceGVR).List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Failed to list VmwareSource CRs: "+err.Error())
+			return
+		}
+		respondWithJSON(w, http.StatusOK, list.Items)
+	}
+}
+
+type CreateVmwareSourcePayload struct {
+	Name       string `json:"name"`
+	Namespace  string `json:"namespace"`
+	Endpoint   string `json:"endpoint"`
+	Datacenter string `json:"datacenter"`
+	Username   string `json:"username"`
+	Password   string `json:"password"`
+}
+
+func CreateVmwareSourceHandler(clients *K8sClients) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var payload CreateVmwareSourcePayload
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			respondWithError(w, http.StatusBadRequest, "Invalid request body")
+			return
+		}
+
+		// 1. Create the Secret
+		secretName := payload.Name + "-credentials"
+		secret := &v1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      secretName,
+				Namespace: payload.Namespace,
+			},
+			StringData: map[string]string{
+				"username": payload.Username,
+				"password": payload.Password,
+			},
+		}
+		_, err := clients.Clientset.CoreV1().Secrets(payload.Namespace).Create(context.TODO(), secret, metav1.CreateOptions{})
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Failed to create credentials secret: "+err.Error())
+			return
+		}
+
+		// 2. Create the VmwareSource
+		vmwareSource := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "migration.harvesterhci.io/v1beta1",
+				"kind":       "VmwareSource",
+				"metadata": map[string]interface{}{
+					"name":      payload.Name,
+					"namespace": payload.Namespace,
+				},
+				"spec": map[string]interface{}{
+					"endpoint": payload.Endpoint,
+					"dc":       payload.Datacenter,
+					"credentials": map[string]interface{}{
+						"name":      secretName,
+						"namespace": payload.Namespace,
+					},
+				},
+			},
+		}
+
+		createdObj, err := clients.Dynamic.Resource(vmwareSourceGVR).Namespace(payload.Namespace).Create(context.TODO(), vmwareSource, metav1.CreateOptions{})
+		if err != nil {
+			// Clean up the secret if source creation fails
+			_ = clients.Clientset.CoreV1().Secrets(payload.Namespace).Delete(context.TODO(), secretName, metav1.DeleteOptions{})
+			respondWithError(w, http.StatusInternalServerError, "Failed to create VmwareSource CR: "+err.Error())
+			return
+		}
+
+		respondWithJSON(w, http.StatusCreated, createdObj)
+	}
+}
+
+func UpdateVmwareSourceHandler(clients *K8sClients) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		namespace := vars["namespace"]
+		name := vars["name"]
+
+		var payload CreateVmwareSourcePayload
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			respondWithError(w, http.StatusBadRequest, "Invalid request body")
+			return
+		}
+
+		// 1. Get the existing VmwareSource to find the secret name
+		sourceObj, err := clients.Dynamic.Resource(vmwareSourceGVR).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil {
+			respondWithError(w, http.StatusNotFound, "Failed to get VmwareSource: "+err.Error())
+			return
+		}
+		secretName, _, _ := unstructured.NestedString(sourceObj.Object, "spec", "credentials", "name")
+
+		// 2. Update the Secret
+		secret, err := clients.Clientset.CoreV1().Secrets(namespace).Get(context.TODO(), secretName, metav1.GetOptions{})
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Failed to get associated secret: "+err.Error())
+			return
+		}
+		secret.StringData = map[string]string{
+			"username": payload.Username,
+			"password": payload.Password,
+		}
+		_, err = clients.Clientset.CoreV1().Secrets(namespace).Update(context.TODO(), secret, metav1.UpdateOptions{})
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Failed to update secret: "+err.Error())
+			return
+		}
+
+		// 3. Update the VmwareSource
+		unstructured.SetNestedField(sourceObj.Object, payload.Endpoint, "spec", "endpoint")
+		unstructured.SetNestedField(sourceObj.Object, payload.Datacenter, "spec", "dc")
+
+		updatedObj, err := clients.Dynamic.Resource(vmwareSourceGVR).Namespace(namespace).Update(context.TODO(), sourceObj, metav1.UpdateOptions{})
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Failed to update VmwareSource: "+err.Error())
+			return
+		}
+
+		respondWithJSON(w, http.StatusOK, updatedObj)
+	}
+}
+
+func DeleteVmwareSourceHandler(clients *K8sClients) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		namespace := vars["namespace"]
+		name := vars["name"]
+
+		// 1. Get the VmwareSource to find the associated secret
+		sourceObj, err := clients.Dynamic.Resource(vmwareSourceGVR).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Failed to get VmwareSource: "+err.Error())
+			return
+		}
+		secretName, _, _ := unstructured.NestedString(sourceObj.Object, "spec", "credentials", "name")
+
+		// 2. Delete the VmwareSource
+		err = clients.Dynamic.Resource(vmwareSourceGVR).Namespace(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{})
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Failed to delete VmwareSource: "+err.Error())
+			return
+		}
+
+		// 3. Delete the associated Secret
+		if secretName != "" {
+			err = clients.Clientset.CoreV1().Secrets(namespace).Delete(context.TODO(), secretName, metav1.DeleteOptions{})
+			if err != nil {
+				// Log the error but don't fail the request, as the primary resource was deleted.
+				log.Warnf("Failed to delete associated secret %s/%s: %v", namespace, secretName, err)
+			}
+		}
+
+		w.WriteHeader(http.StatusNoContent)
 	}
 }
 
 func ListNamespacesHandler(clients *K8sClients) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if os.Getenv("USE_MOCK_DATA") == "true" {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(mockNamespaces)
-			return
-		}
 		namespaces, err := clients.Clientset.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			respondWithError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(namespaces.Items)
+		respondWithJSON(w, http.StatusOK, namespaces.Items)
 	}
 }
 
@@ -98,7 +352,7 @@ func CreateNamespaceHandler(clients *K8sClients) http.HandlerFunc {
 			Name string `json:"name"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			respondWithError(w, http.StatusBadRequest, "Invalid request body")
 			return
 		}
 
@@ -106,24 +360,16 @@ func CreateNamespaceHandler(clients *K8sClients) http.HandlerFunc {
 		nsSpec := &v1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: payload.Name}}
 		_, err := clients.Clientset.CoreV1().Namespaces().Create(context.TODO(), nsSpec, metav1.CreateOptions{})
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			respondWithError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 
-		w.WriteHeader(http.StatusCreated)
-		json.NewEncoder(w).Encode(map[string]string{"status": "namespace created"})
+		respondWithJSON(w, http.StatusCreated, map[string]string{"status": "namespace created"})
 	}
 }
 
 func ListVlanConfigsHandler(clients *K8sClients) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if os.Getenv("USE_MOCK_DATA") == "true" {
-			log.Info("Using mock data for VLAN configs")
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(mockHarvesterNetworks)
-			return
-		}
-
 		log.Info("Listing Harvester VlanConfigs")
 		gvr := schema.GroupVersionResource{
 			Group:    "network.harvesterhci.io",
@@ -133,14 +379,12 @@ func ListVlanConfigsHandler(clients *K8sClients) http.HandlerFunc {
 
 		list, err := clients.Dynamic.Resource(gvr).List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			respondWithError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 
 		log.Debugf("Fetched VLAN configs: %+v", list.Items)
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(list.Items)
+		respondWithJSON(w, http.StatusOK, list.Items)
 	}
 }
 
@@ -148,10 +392,64 @@ func ListStorageClassesHandler(clients *K8sClients) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		scs, err := clients.Clientset.StorageV1().StorageClasses().List(context.TODO(), metav1.ListOptions{})
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			respondWithError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(scs.Items)
+		respondWithJSON(w, http.StatusOK, scs.Items)
+	}
+}
+
+func HandleGetPlanLogs(clients *K8sClients) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		namespace := vars["namespace"]
+		name := vars["name"]
+
+		log.Infof("Fetching logs related to plan %s/%s", namespace, name)
+
+		// 1. Get the plan to find its source
+		planObj, err := clients.Dynamic.Resource(vmiGVR).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Failed to get plan: "+err.Error())
+			return
+		}
+		sourceName, _, _ := unstructured.NestedString(planObj.Object, "spec", "sourceCluster", "name")
+		sourceNamespace, _, _ := unstructured.NestedString(planObj.Object, "spec", "sourceCluster", "namespace")
+
+		// 2. Find the controller pod
+		pods, err := clients.Clientset.CoreV1().Pods("harvester-system").List(context.TODO(), metav1.ListOptions{
+			LabelSelector: "app.kubernetes.io/name=harvester-vm-import-controller",
+		})
+		if err != nil || len(pods.Items) == 0 {
+			respondWithError(w, http.StatusInternalServerError, "Could not find vm-import-controller pod")
+			return
+		}
+		podName := pods.Items[0].Name
+
+		// 3. Fetch logs from the pod
+		req := clients.Clientset.CoreV1().Pods("harvester-system").GetLogs(podName, &v1.PodLogOptions{})
+		podLogs, err := req.Stream(context.TODO())
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Failed to stream pod logs: "+err.Error())
+			return
+		}
+		defer podLogs.Close()
+
+		// 4. Filter logs for the specific plan and its source
+		var relevantLogs strings.Builder
+		scanner := bufio.NewScanner(podLogs)
+		planSearchString := fmt.Sprintf("'%s/%s'", namespace, name)
+		sourceSearchString := fmt.Sprintf("'%s/%s'", sourceNamespace, sourceName)
+
+		for scanner.Scan() {
+			line := scanner.Text()
+			if strings.Contains(line, planSearchString) || strings.Contains(line, sourceSearchString) {
+				relevantLogs.WriteString(line + "\n")
+			}
+		}
+
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(relevantLogs.String()))
 	}
 }

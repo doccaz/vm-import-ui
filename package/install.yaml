@@ -1,3 +1,5 @@
+# package/install.yaml
+# Deploys the add-on's Kubernetes resources.
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -14,9 +16,9 @@ kind: ClusterRole
 metadata:
   name: vm-import-ui-role
 rules:
-- apiGroups: ["harvesterhci.io"]
-  resources: ["virtualmachineimports", "virtualmachineimports/status", "settings"]
-  verbs: ["get", "list", "watch", "create", "update", "patch"]
+- apiGroups: ["migration.harvesterhci.io"]
+  resources: ["virtualmachineimports", "virtualmachineimports/status", "vmwaresources"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 - apiGroups: ["network.harvesterhci.io"]
   resources: ["vlanconfigs"]
   verbs: ["get", "list", "watch"]
@@ -24,8 +26,11 @@ rules:
   resources: ["storageclasses"]
   verbs: ["get", "list", "watch"]
 - apiGroups: [""]
-  resources: ["namespaces"]
-  verbs: ["get", "list", "watch", "create"]
+  resources: ["namespaces", "secrets"]
+  verbs: ["get", "list", "watch", "create", "update", "delete"]
+- apiGroups: [""]
+  resources: ["pods", "pods/log"]
+  verbs: ["get", "list", "watch"]
 - apiGroups: ["management.cattle.io"]
   resources: ["projects"]
   verbs: ["get", "list", "watch"]
@@ -61,7 +66,7 @@ spec:
       serviceAccountName: vm-import-ui-sa
       containers:
       - name: vm-import-ui
-        image: your-docker-registry/vm-import-ui:0.4.6
+        image: your-docker-registry/vm-import-ui:0.6.3
         ports:
         - containerPort: 8080
         env:
