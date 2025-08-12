@@ -48,6 +48,7 @@ func main() {
 	api.HandleFunc("/harvester/namespaces", CreateNamespaceHandler(k8sClients)).Methods("POST")
 	api.HandleFunc("/harvester/vlanconfigs", ListVlanConfigsHandler(k8sClients)).Methods("GET")
 	api.HandleFunc("/harvester/storageclasses", ListStorageClassesHandler(k8sClients)).Methods("GET")
+	api.HandleFunc("/harvester/virtualmachines/{namespace}", ListVMsHandler(k8sClients)).Methods("GET")
 
 	// Serve the frontend
 	uiPath := "/ui"

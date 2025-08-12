@@ -30,6 +30,11 @@ var (
 		Version:  "v1beta1",
 		Resource: "vmwaresources",
 	}
+	vmGVR = schema.GroupVersionResource{
+		Group:    "kubevirt.io",
+		Version:  "v1",
+		Resource: "virtualmachines",
+	}
 )
 
 // Helper to respond with JSON
@@ -539,5 +544,19 @@ func HandleGetSourceYAML(clients *K8sClients) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/yaml")
 		w.WriteHeader(http.StatusOK)
 		w.Write(yamlBytes)
+	}
+}
+
+func ListVMsHandler(clients *K8sClients) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		namespace := vars["namespace"]
+
+		list, err := clients.Dynamic.Resource(vmGVR).Namespace(namespace).List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Failed to list VirtualMachines: "+err.Error())
+			return
+		}
+		respondWithJSON(w, http.StatusOK, list.Items)
 	}
 }

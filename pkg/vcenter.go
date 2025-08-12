@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"net/url"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/vmware/govmomi"
@@ -26,7 +27,12 @@ type InventoryNode struct {
 
 // GetVCenterInventory connects to vCenter and returns the inventory tree.
 func GetVCenterInventory(ctx context.Context, creds VCenterCredentials) (*InventoryNode, error) {
-	u, err := url.Parse(creds.URL)
+	fullURL := creds.URL
+	if !strings.HasPrefix(fullURL, "https://") && !strings.HasPrefix(fullURL, "http://") {
+		fullURL = "https://" + fullURL
+	}
+
+	u, err := url.Parse(fullURL)
 	if err != nil {
 		return nil, err
 	}
@@ -95,19 +101,16 @@ func processEntity(ctx context.Context, c *govmomi.Client, entity object.Referen
 	switch e := entity.(type) {
 	case *object.VirtualMachine:
 		var mvm mo.VirtualMachine
-		err := pc.RetrieveOne(ctx, ref, []string{"network", "summary.storage", "summary.config"}, &mvm)
+		err := pc.RetrieveOne(ctx, ref, []string{"guest.net", "summary.storage", "summary.config"}, &mvm)
 		if err != nil {
 			return nil, err
 		}
 
-		if mvm.Network != nil {
-			var nets []mo.Network
-			err = pc.Retrieve(ctx, mvm.Network, []string{"name"}, &nets)
-			if err != nil {
-				return nil, err
-			}
-			for _, net := range nets {
-				node.Networks = append(node.Networks, net.Name)
+		log.Debugf("Raw VM data from vCenter for %s: %+v", me.Name, mvm)
+
+		if mvm.Guest != nil {
+			for _, net := range mvm.Guest.Net {
+				node.Networks = append(node.Networks, net.Network)
 			}
 		}
 

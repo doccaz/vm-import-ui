@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, ChevronRight, Server, Folder, Cloud, HardDrive, ArrowRight, X, Loader, CheckCircle, Clock, Cpu, MemoryStick, Trash2, Play, Edit, AlertTriangle, Info } from 'lucide-react';
+import { Plus, ChevronRight, Server, Folder, Cloud, HardDrive, ArrowRight, X, Loader, CheckCircle, Clock, Cpu, MemoryStick, Trash2, Edit, AlertTriangle, RefreshCw } from 'lucide-react';
 
 // --- Helper Functions ---
 const formatBytes = (bytes, decimals = 2) => {
@@ -47,7 +47,7 @@ const getPlanStatus = (plan) => {
     return 'Pending';
 };
 
-const ResourceTable = ({ plans, onViewDetails, onRunNow, onDelete }) => (
+const ResourceTable = ({ plans, onViewDetails, onDelete }) => (
     <div className="bg-white shadow-md rounded-lg overflow-hidden">
         <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -56,7 +56,7 @@ const ResourceTable = ({ plans, onViewDetails, onRunNow, onDelete }) => (
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">VM Name</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Target Namespace</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Scheduled At</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Storage Class</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
                 </tr>
             </thead>
@@ -72,9 +72,8 @@ const ResourceTable = ({ plans, onViewDetails, onRunNow, onDelete }) => (
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{getPlanStatus(plan)}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{plan.spec.virtualMachineName}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{plan.metadata.namespace}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{plan.spec.schedule ? new Date(plan.spec.schedule).toLocaleString() : 'Not Scheduled'}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{plan.spec.storageClass}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
-                                <button onClick={() => onRunNow(plan)} title="Run Now" className="text-green-600 hover:text-green-800"><Play size={18}/></button>
                                 <button onClick={() => {}} title="Edit" className="text-gray-600 hover:text-gray-800 cursor-not-allowed"><Edit size={18}/></button>
                                 <button onClick={() => onDelete(plan)} title="Delete" className="text-red-600 hover:text-red-800"><Trash2 size={18}/></button>
                                 <button onClick={() => onViewDetails(plan)} className="text-blue-600 hover:text-blue-800">Details</button>
@@ -523,15 +522,16 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
     const [connectionError, setConnectionError] = useState('');
     const [selectedVm, setSelectedVm] = useState(null);
     const [planName, setPlanName] = useState('');
+    const [destinationVmName, setDestinationVmName] = useState('');
     const [targetNamespace, setTargetNamespace] = useState('');
     const [newNamespace, setNewNamespace] = useState('');
     const [namespaces, setNamespaces] = useState([]);
+    const [existingVmNames, setExistingVmNames] = useState([]);
+    const [vmNameConflict, setVmNameConflict] = useState(false);
     const [networkMappings, setNetworkMappings] = useState({});
     const [harvesterNetworks, setHarvesterNetworks] = useState([]);
     const [storageClass, setStorageClass] = useState('');
     const [storageClasses, setStorageClasses] = useState([]);
-    const [schedule, setSchedule] = useState('later');
-    const [scheduleDate, setScheduleDate] = useState('');
 
     const fetchNamespaces = () => {
         fetch('/api/v1/harvester/namespaces')
@@ -540,16 +540,59 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
             .catch(err => console.error("Failed to fetch namespaces:", err));
     };
 
-    useEffect(() => {
+    const fetchSources = () => {
         fetch('/api/v1/harvester/vmwaresources')
             .then(res => res.json())
             .then(data => setVmwareSources(data || []))
             .catch(err => console.error("Failed to fetch VmwareSources:", err));
-        
-        fetchNamespaces();
+    };
+
+    const fetchNetworks = () => {
         fetch('/api/v1/harvester/vlanconfigs').then(res => res.json()).then(data => setHarvesterNetworks(data.map(net => net.metadata.name)));
+    };
+
+    const fetchStorageClasses = () => {
         fetch('/api/v1/harvester/storageclasses').then(res => res.json()).then(data => setStorageClasses(data.map(sc => sc.metadata.name)));
+    };
+    
+    const fetchVmsInNamespace = async (namespace) => {
+        if (!namespace) {
+            setExistingVmNames([]);
+            return;
+        }
+        try {
+            const response = await fetch(`/api/v1/harvester/virtualmachines/${namespace}`);
+            const data = await response.json();
+            setExistingVmNames(data.map(vm => vm.metadata.name));
+        } catch (err) {
+            console.error("Failed to fetch VMs in namespace:", err);
+        }
+    };
+
+    useEffect(() => {
+        fetchSources();
+        fetchNamespaces();
+        fetchNetworks();
+        fetchStorageClasses();
     }, []);
+
+    useEffect(() => {
+        if (selectedVm) {
+            setDestinationVmName(selectedVm.name);
+        }
+    }, [selectedVm]);
+
+    useEffect(() => {
+        fetchVmsInNamespace(targetNamespace);
+    }, [targetNamespace]);
+
+    useEffect(() => {
+        if (existingVmNames.includes(destinationVmName)) {
+            setVmNameConflict(true);
+        } else {
+            setVmNameConflict(false);
+        }
+    }, [destinationVmName, existingVmNames]);
 
     const handleSourceChange = async (sourceIdentifier) => {
         setSelectedSource(sourceIdentifier);
@@ -624,7 +667,7 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
                 namespace: finalTargetNamespace,
             },
             spec: {
-                virtualMachineName: selectedVm.name,
+                virtualMachineName: destinationVmName,
                 sourceCluster: {
                     name: sourceName,
                     namespace: sourceNamespace,
@@ -636,7 +679,6 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
                     sourceNetwork: key,
                     destinationNetwork: `${finalTargetNamespace}/${value}`,
                 })),
-                schedule: schedule === 'now' ? null : (scheduleDate ? new Date(scheduleDate).toISOString() : null),
             }
         };
 
@@ -650,17 +692,18 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
                     <div>
                         <h3 className="text-lg font-medium text-gray-900 mb-2">Select vCenter Source & VM</h3>
                         <div className="space-y-4 p-4 border rounded-md bg-gray-50">
-                             <div>
-                                <label className="block text-sm font-medium text-gray-700">vCenter Source</label>
-                                <select value={selectedSource} onChange={e => handleSourceChange(e.target.value)} className="mt-1 block w-full form-select">
-                                    <option value="">Select a source...</option>
-                                    {vmwareSources.map(source => (
-                                        <option key={source.metadata.uid} value={`${source.metadata.namespace}/${source.metadata.name}`}>
-                                            {source.metadata.namespace}/{source.metadata.name}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
+                             <div className="flex items-center">
+                                <label className="block text-sm font-medium text-gray-700 flex-grow">vCenter Source</label>
+                                <button onClick={fetchSources} className="ml-2 text-blue-500 hover:text-blue-700"><RefreshCw size={16}/></button>
+                             </div>
+                             <select value={selectedSource} onChange={e => handleSourceChange(e.target.value)} className="mt-1 block w-full form-select">
+                                <option value="">Select a source...</option>
+                                {vmwareSources.map(source => (
+                                    <option key={source.metadata.uid} value={`${source.metadata.namespace}/${source.metadata.name}`}>
+                                        {source.metadata.namespace}/{source.metadata.name}
+                                    </option>
+                                ))}
+                            </select>
                         </div>
 
                         {isConnecting && <Loader className="animate-spin mt-4" />}
@@ -669,6 +712,9 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
                         {vcenterInventory && (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                                 <div className="border border-gray-200 rounded-md p-2 h-96 overflow-y-auto bg-white">
+                                    <div className="flex justify-end">
+                                        <button onClick={() => handleSourceChange(selectedSource)} className="text-blue-500 hover:text-blue-700"><RefreshCw size={16}/></button>
+                                    </div>
                                     <InventoryTree node={vcenterInventory} onVmSelect={setSelectedVm} currentlySelectedVm={selectedVm}/>
                                 </div>
                                 <VmDetailsPanel vm={selectedVm} />
@@ -680,12 +726,20 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
             case 2:
                 return (
                     <div>
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">Configuration</h3>
+                        <div className="flex justify-between items-center">
+                            <h3 className="text-lg font-medium text-gray-900 mb-2">Configuration</h3>
+                            <button onClick={() => {fetchNamespaces(); fetchStorageClasses();}} className="text-blue-500 hover:text-blue-700"><RefreshCw size={16}/></button>
+                        </div>
                         <p className="text-sm text-gray-600 mb-4">Define the migration plan details and target resources.</p>
                         <div className="space-y-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700">Plan Name</label>
                                 <input type="text" value={planName} onChange={e => setPlanName(e.target.value)} className="mt-1 block w-full form-input" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700">Destination VM Name</label>
+                                <input type="text" value={destinationVmName} onChange={e => setDestinationVmName(e.target.value)} className="mt-1 block w-full form-input" />
+                                {vmNameConflict && <p className="text-sm text-red-600 mt-1">A VM with this name already exists in the target namespace.</p>}
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700">Target Namespace</label>
@@ -717,53 +771,38 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
             case 3:
                 return (
                     <div>
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">Network Mapping</h3>
-                        <p className="text-sm text-gray-600 mb-4">Map source networks to target Harvester networks.</p>
-                        <div className="space-y-3">
-                            {sourceNetworks.map(net => (
-                                <div key={net} className="grid grid-cols-3 items-center gap-4">
-                                    <span className="font-mono text-sm text-gray-800">{net}</span>
-                                    <ArrowRight className="mx-auto text-gray-400" />
-                                    <select onChange={e => setNetworkMappings(prev => ({...prev, [net]: e.target.value}))} className="form-select">
-                                        <option>Select Harvester Network</option>
-                                        {harvesterNetworks.map(hnet => <option key={hnet} value={hnet}>{hnet}</option>)}
-                                    </select>
-                                </div>
-                            ))}
+                        <div className="flex items-center">
+                            <h3 className="text-lg font-medium text-gray-900 mb-2 flex-grow">Network Mapping</h3>
+                            <button onClick={fetchNetworks} className="ml-2 text-blue-500 hover:text-blue-700"><RefreshCw size={16}/></button>
                         </div>
+                        <p className="text-sm text-gray-600 mb-4">Map source networks to target Harvester networks.</p>
+                        {harvesterNetworks.length === 0 ? (
+                            <p className="text-sm text-gray-500">No VLANs defined in Harvester.</p>
+                        ) : (
+                            <div className="space-y-3">
+                                {sourceNetworks.map(net => (
+                                    <div key={net} className="grid grid-cols-3 items-center gap-4">
+                                        <span className="font-mono text-sm text-gray-800">{net}</span>
+                                        <ArrowRight className="mx-auto text-gray-400" />
+                                        <select onChange={e => setNetworkMappings(prev => ({...prev, [net]: e.target.value}))} className="form-select">
+                                            <option>Select Harvester Network</option>
+                                            {harvesterNetworks.map(hnet => <option key={hnet} value={hnet}>{hnet}</option>)}
+                                        </select>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 );
             case 4:
                 return (
                     <div>
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">Schedule</h3>
-                        <p className="text-sm text-gray-600 mb-4">Choose when to run the migration plan.</p>
-                        <div className="space-y-2">
-                            <label className="flex items-center">
-                                <input type="radio" name="schedule" value="now" checked={schedule === 'now'} onChange={e => setSchedule(e.target.value)} className="form-radio" />
-                                <span className="ml-2">Run Immediately (creates an unscheduled plan)</span>
-                            </label>
-                            <label className="flex items-center">
-                                <input type="radio" name="schedule" value="later" checked={schedule === 'later'} onChange={e => setSchedule(e.target.value)} className="form-radio" />
-                                <span className="ml-2">Schedule for Later</span>
-                            </label>
-                        </div>
-                        {schedule === 'later' && (
-                            <div className="mt-4">
-                                <input type="datetime-local" value={scheduleDate} onChange={e => setScheduleDate(e.target.value)} className="mt-1 block w-full form-input" />
-                            </div>
-                        )}
-                    </div>
-                );
-            case 5:
-                return (
-                    <div>
                         <h3 className="text-lg font-medium text-gray-900 mb-2">Review Plan</h3>
                         <div className="space-y-4 text-sm">
                             <div><strong>Plan Name:</strong> {planName}</div>
+                            <div><strong>Destination VM Name:</strong> {destinationVmName}</div>
                             <div><strong>Target Namespace:</strong> {targetNamespace === 'create_new' ? `${newNamespace} (new)` : targetNamespace}</div>
                             <div><strong>Storage Class:</strong> {storageClass}</div>
-                            <div><strong>Schedule:</strong> {schedule === 'now' ? 'Run Immediately' : (scheduleDate ? new Date(scheduleDate).toLocaleString() : 'Not Scheduled')}</div>
                             <div>
                                 <h4 className="font-medium mt-2">VM to Migrate:</h4>
                                 <ul className="list-disc list-inside pl-4">
@@ -793,8 +832,8 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
                 <button onClick={onCancel} className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-md">Cancel</button>
                 <div>
                     {step > 1 && <button onClick={() => setStep(s => s - 1)} className="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-md mr-2">Back</button>}
-                    {step < 5 && <button onClick={() => setStep(s => s + 1)} className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-md">Next</button>}
-                    {step === 5 && <button onClick={handleSubmit} className="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-md">Create Plan</button>}
+                    {step < 4 && <button onClick={() => setStep(s => s + 1)} disabled={vmNameConflict} className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-md disabled:opacity-50">Next</button>}
+                    {step === 4 && <button onClick={handleSubmit} className="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-md">Create Plan</button>}
                 </div>
             </div>
         </div>
@@ -814,7 +853,6 @@ const AboutPage = () => (
                 <li><strong>vCenter Sources Tab:</strong> Before you can import VMs, you must configure a connection to your vCenter. Use the "Create" button to add a new source, providing your vCenter's endpoint, datacenter name, and credentials.</li>
                 <li><strong>Migration Plans Tab:</strong> Once a source is configured, you can create a migration plan. Click "Create", select your vCenter source, and browse the inventory to choose a VM to import.</li>
                 <li><strong>Configuration:</strong> Follow the wizard to configure the plan name, target namespace, storage, and network mappings for the new VM.</li>
-                <li><strong>Scheduling:</strong> You can choose to run the migration immediately or schedule it for a later date and time.</li>
                 <li><strong>Management:</strong> All created plans will appear in the dashboard, where you can run, delete, or view their details and logs.</li>
             </ol>
         </div>
@@ -829,10 +867,10 @@ export default function App() {
     const [selectedPlan, setSelectedPlan] = useState(null);
     const [selectedSource, setSelectedSource] = useState(null);
     const [planToDelete, setPlanToDelete] = useState(null);
-    const [planToRun, setPlanToRun] = useState(null);
     const [sourceToEdit, setSourceToEdit] = useState(null);
     const [sourceToDelete, setSourceToDelete] = useState(null);
     const [showSourceWizard, setShowSourceWizard] = useState(false);
+    const [refreshInterval, setRefreshInterval] = useState(10);
 
     const fetchPlans = async () => {
         setIsLoading(true);
@@ -871,7 +909,9 @@ export default function App() {
     useEffect(() => {
         fetchPlans();
         fetchSources();
-    }, []);
+        const intervalId = setInterval(fetchPlans, refreshInterval * 1000);
+        return () => clearInterval(intervalId);
+    }, [refreshInterval]);
 
     const handleCreatePlan = async (planPayload) => {
         try {
@@ -903,19 +943,6 @@ export default function App() {
             setPlanToDelete(null); // Close the modal
         } catch (err) {
             console.error("Failed to delete plan:", err);
-        }
-    };
-
-    const handleRunNow = async () => {
-        if (!planToRun) return;
-        try {
-            await fetch(`/api/v1/plans/${planToRun.metadata.namespace}/${planToRun.metadata.name}/run`, {
-                method: 'POST',
-            });
-            fetchPlans(); // Refresh the list
-            setPlanToRun(null);
-        } catch (err) {
-            console.error("Failed to run plan:", err);
         }
     };
     
@@ -962,7 +989,9 @@ export default function App() {
             vms: [{
                 name: plan.spec.virtualMachineName,
                 status: getPlanStatus(plan),
-                progress: 0, // This would come from the status in a real scenario
+                progress: 0, 
+                cpu: 2, 
+                memoryMB: 2048,
                 diskSizeGB: 50, 
             }]
         };
@@ -1008,7 +1037,12 @@ export default function App() {
                 return (
                     <div>
                         <Header title="VM Migration Plans" onButtonClick={() => setPage('createPlan')} />
-                        {isLoading ? <p>Loading plans...</p> : <ResourceTable plans={plans} onViewDetails={handleViewDetails} onRunNow={setPlanToRun} onDelete={setPlanToDelete} />}
+                        {isLoading ? <p>Loading plans...</p> : <ResourceTable plans={plans} onViewDetails={handleViewDetails} onDelete={setPlanToDelete} />}
+                        <div className="flex justify-end items-center mt-4 space-x-2">
+                            <button onClick={fetchPlans} className="text-blue-500 hover:text-blue-700"><RefreshCw size={20}/></button>
+                            <input type="number" value={refreshInterval} onChange={e => setRefreshInterval(e.target.value)} className="w-20 form-input text-sm" />
+                            <span className="text-sm text-gray-600">seconds</span>
+                        </div>
                     </div>
                 );
         }
@@ -1035,18 +1069,6 @@ export default function App() {
                         <div className="flex justify-end space-x-4">
                             <button onClick={() => setPlanToDelete(null)} className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-md">Cancel</button>
                             <button onClick={handleDeletePlan} className="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-md">Delete</button>
-                        </div>
-                    </div>
-                </div>
-            )}
-            {planToRun && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 z-50">
-                    <div className="bg-white rounded-lg shadow-xl p-6">
-                        <h3 className="text-lg font-bold">Confirm Run Now</h3>
-                        <p className="my-4">Are you sure you want to run the plan "{planToRun.metadata.name}" immediately? This will remove its schedule.</p>
-                        <div className="flex justify-end space-x-4">
-                            <button onClick={() => setPlanToRun(null)} className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-md">Cancel</button>
-                            <button onClick={handleRunNow} className="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-md">Run Now</button>
                         </div>
                     </div>
                 </div>
