@@ -25,6 +25,9 @@ rules:
 - apiGroups: ["storage.k8s.io"]
   resources: ["storageclasses"]
   verbs: ["get", "list", "watch"]
+- apiGroups: ["kubevirt.io"]
+  resources: ["virtualmachines"]
+  verbs: ["get", "list", "watch"]
 - apiGroups: [""]
   resources: ["namespaces", "secrets"]
   verbs: ["get", "list", "watch", "create", "update", "delete"]
@@ -66,7 +69,7 @@ spec:
       serviceAccountName: vm-import-ui-sa
       containers:
       - name: vm-import-ui
-        image: your-docker-registry/vm-import-ui:0.6.5
+        image: your-docker-registry/vm-import-ui:0.6.6
         ports:
         - containerPort: 8080
         env:

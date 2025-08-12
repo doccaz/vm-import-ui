@@ -251,8 +251,6 @@ const SourceDetails = ({ source, onClose }) => {
 };
 
 const PlanDetails = ({ plan, onClose }) => {
-    const [localPlan, setLocalPlan] = useState(plan);
-    const [startTime] = useState(Date.now());
     const [logs, setLogs] = useState('');
     const [yamlContent, setYamlContent] = useState('');
     const [showDebug, setShowDebug] = useState(null); // 'logs' or 'yaml'
@@ -297,103 +295,31 @@ const PlanDetails = ({ plan, onClose }) => {
         }
     };
 
-    useEffect(() => {
-        const interval = setInterval(() => {
-            setLocalPlan(currentPlan => {
-                if (getPlanStatus(currentPlan) !== 'In Progress') return currentPlan;
-
-                const updatedVms = currentPlan.vms.map(vm => {
-                    if (vm.status === 'Completed' || vm.status === 'Failed') return vm;
-
-                    let newProgress = vm.progress + Math.random() * 5;
-                    let newStatus = 'Copying Disks';
-
-                    if (newProgress >= 100) {
-                        newProgress = 100;
-                        newStatus = 'Completed';
-                    }
-                    return { ...vm, progress: newProgress, status: newStatus };
-                });
-
-                const allDone = updatedVms.every(vm => vm.status === 'Completed' || vm.status === 'Failed');
-                const newPlanStatus = allDone ? 'Completed' : 'In Progress';
-
-                return { ...currentPlan, status: { ...currentPlan.status, importStatus: newPlanStatus }, vms: updatedVms };
-            });
-        }, 1000);
-
-        return () => clearInterval(interval);
-    }, []);
-
-    const overallStats = useMemo(() => {
-        if (!localPlan.vms || localPlan.vms.length === 0) return {
-            progress: 0, totalSize: 0, transferred: 0, speed: 0, eta: 0
-        };
-
-        const totalSize = localPlan.vms.reduce((acc, vm) => acc + (vm.diskSizeGB || 0), 0) * 1024 * 1024 * 1024;
-        const transferred = localPlan.vms.reduce((acc, vm) => acc + (vm.diskSizeGB || 0) * (vm.progress / 100), 0) * 1024 * 1024 * 1024;
-        const progress = totalSize > 0 ? (transferred / totalSize) * 100 : 0;
-
-        const elapsedSeconds = (Date.now() - startTime) / 1000;
-        const speed = elapsedSeconds > 0 ? transferred / elapsedSeconds : 0;
-        
-        const remainingBytes = totalSize - transferred;
-        const eta = speed > 0 ? remainingBytes / speed : Infinity;
-
-        return { progress, totalSize, transferred, speed, eta };
-    }, [localPlan.vms, startTime]);
-
-    const getStatusIcon = (status) => {
-        switch (status) {
-            case 'Completed': return <CheckCircle className="text-green-500" />;
-            case 'In Progress':
-            case 'Copying Disks': return <Loader className="animate-spin text-blue-500" />;
-            case 'Scheduled':
-            case 'Queued': return <Clock className="text-gray-500" />;
-            case 'virtualMachineImportInvalid': return <AlertTriangle className="text-red-500" />;
-            default: return null;
-        }
-    };
-
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 z-50">
             <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl flex flex-col max-h-[90vh]">
                 <div className="flex justify-between items-center p-4 border-b">
-                    <h2 className="text-xl font-semibold text-gray-800">{localPlan.name}</h2>
+                    <h2 className="text-xl font-semibold text-gray-800">{plan.metadata.name}</h2>
                     <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-200">
                         <X size={20} />
                     </button>
                 </div>
                 <div className="p-6 space-y-6 overflow-y-auto">
                     <div>
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">Overall Progress</h3>
-                        <div className="w-full bg-gray-200 rounded-full h-4">
-                            <div className="bg-blue-600 h-4 rounded-full transition-all duration-500" style={{ width: `${overallStats.progress}%` }}></div>
-                        </div>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm mt-2 text-gray-600">
-                            <span>{formatBytes(overallStats.transferred)} / {formatBytes(overallStats.totalSize)}</span>
-                            <span className="font-medium">{formatBytes(overallStats.speed)}/s</span>
-                            <span className="flex items-center gap-2">{getStatusIcon(getPlanStatus(localPlan))} {getPlanStatus(localPlan)}</span>
-                            <span>ETA: {formatSeconds(overallStats.eta)}</span>
-                        </div>
-                    </div>
-                    <div>
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">VM Migration Status</h3>
-                        <div className="space-y-3">
-                            {localPlan.vms.map((vm, index) => (
-                                <div key={index} className="p-3 bg-gray-50 rounded-md border">
-                                    <div className="flex justify-between items-center mb-1">
-                                        <span className="font-medium text-gray-800">{vm.name}</span>
-                                        <span className="text-sm flex items-center gap-2 text-gray-600">
-                                            {getStatusIcon(vm.status)}
-                                            {vm.status}
-                                        </span>
-                                    </div>
-                                    <div className="w-full bg-gray-200 rounded-full h-2.5">
-                                        <div className="bg-green-500 h-2.5 rounded-full transition-all duration-500" style={{ width: `${vm.progress || 0}%` }}></div>
-                                    </div>
-                                </div>
-                            ))}
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">VM Characteristics</h3>
+                        <div className="p-3 bg-gray-50 rounded-md border text-sm space-y-2">
+                            <div className="flex items-center">
+                                <Cpu size={16} className="mr-2 text-gray-600" />
+                                <span>{plan.vms[0]?.cpu || 'N/A'} vCPU(s)</span>
+                            </div>
+                            <div className="flex items-center">
+                                <MemoryStick size={16} className="mr-2 text-gray-600" />
+                                <span>{formatBytes((plan.vms[0]?.memoryMB || 0) * 1024 * 1024, 0)} Memory</span>
+                            </div>
+                            <div className="flex items-center">
+                                <HardDrive size={16} className="mr-2 text-gray-600" />
+                                <span>{plan.vms[0]?.diskSizeGB || 'N/A'} GB Storage</span>
+                            </div>
                         </div>
                     </div>
                     <div>
@@ -522,7 +448,6 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
     const [connectionError, setConnectionError] = useState('');
     const [selectedVm, setSelectedVm] = useState(null);
     const [planName, setPlanName] = useState('');
-    const [destinationVmName, setDestinationVmName] = useState('');
     const [targetNamespace, setTargetNamespace] = useState('');
     const [newNamespace, setNewNamespace] = useState('');
     const [namespaces, setNamespaces] = useState([]);
@@ -577,22 +502,16 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
     }, []);
 
     useEffect(() => {
-        if (selectedVm) {
-            setDestinationVmName(selectedVm.name);
-        }
-    }, [selectedVm]);
-
-    useEffect(() => {
         fetchVmsInNamespace(targetNamespace);
     }, [targetNamespace]);
 
     useEffect(() => {
-        if (existingVmNames.includes(destinationVmName)) {
+        if (selectedVm && existingVmNames.includes(selectedVm.name)) {
             setVmNameConflict(true);
         } else {
             setVmNameConflict(false);
         }
-    }, [destinationVmName, existingVmNames]);
+    }, [selectedVm, existingVmNames]);
 
     const handleSourceChange = async (sourceIdentifier) => {
         setSelectedSource(sourceIdentifier);
@@ -667,7 +586,7 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
                 namespace: finalTargetNamespace,
             },
             spec: {
-                virtualMachineName: destinationVmName,
+                virtualMachineName: selectedVm.name,
                 sourceCluster: {
                     name: sourceName,
                     namespace: sourceNamespace,
@@ -737,11 +656,6 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
                                 <input type="text" value={planName} onChange={e => setPlanName(e.target.value)} className="mt-1 block w-full form-input" />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700">Destination VM Name</label>
-                                <input type="text" value={destinationVmName} onChange={e => setDestinationVmName(e.target.value)} className="mt-1 block w-full form-input" />
-                                {vmNameConflict && <p className="text-sm text-red-600 mt-1">A VM with this name already exists in the target namespace.</p>}
-                            </div>
-                            <div>
                                 <label className="block text-sm font-medium text-gray-700">Target Namespace</label>
                                 <select value={targetNamespace} onChange={e => setTargetNamespace(e.target.value)} className="mt-1 block w-full form-select">
                                     <option value="">Select a namespace</option>
@@ -757,6 +671,7 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
                                         className="mt-2 block w-full form-input" 
                                     />
                                 )}
+                                {vmNameConflict && <p className="text-sm text-red-600 mt-1">A VM with the name "{selectedVm.name}" already exists in this namespace. Please choose a different namespace.</p>}
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700">Target Storage Class</label>
@@ -800,7 +715,7 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
                         <h3 className="text-lg font-medium text-gray-900 mb-2">Review Plan</h3>
                         <div className="space-y-4 text-sm">
                             <div><strong>Plan Name:</strong> {planName}</div>
-                            <div><strong>Destination VM Name:</strong> {destinationVmName}</div>
+                            <div><strong>Destination VM Name:</strong> {selectedVm.name}</div>
                             <div><strong>Target Namespace:</strong> {targetNamespace === 'create_new' ? `${newNamespace} (new)` : targetNamespace}</div>
                             <div><strong>Storage Class:</strong> {storageClass}</div>
                             <div>
