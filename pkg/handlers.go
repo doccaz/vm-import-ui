@@ -252,6 +252,31 @@ func CreateVmwareSourceHandler(clients *K8sClients) http.HandlerFunc {
 	}
 }
 
+func GetVmwareSourceDetails(clients *K8sClients) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		namespace := vars["namespace"]
+		name := vars["name"]
+
+		sourceObj, err := clients.Dynamic.Resource(vmwareSourceGVR).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil {
+			respondWithError(w, http.StatusNotFound, "Failed to get VmwareSource: "+err.Error())
+			return
+		}
+
+		secretName, _, _ := unstructured.NestedString(sourceObj.Object, "spec", "credentials", "name")
+		secret, err := clients.Clientset.CoreV1().Secrets(namespace).Get(context.TODO(), secretName, metav1.GetOptions{})
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Failed to get associated secret: "+err.Error())
+			return
+		}
+
+		sourceObj.Object["spec"].(map[string]interface{})["username"] = string(secret.Data["username"])
+
+		respondWithJSON(w, http.StatusOK, sourceObj)
+	}
+}
+
 func UpdateVmwareSourceHandler(clients *K8sClients) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
@@ -272,20 +297,29 @@ func UpdateVmwareSourceHandler(clients *K8sClients) http.HandlerFunc {
 		}
 		secretName, _, _ := unstructured.NestedString(sourceObj.Object, "spec", "credentials", "name")
 
-		// 2. Update the Secret
-		secret, err := clients.Clientset.CoreV1().Secrets(namespace).Get(context.TODO(), secretName, metav1.GetOptions{})
-		if err != nil {
-			respondWithError(w, http.StatusInternalServerError, "Failed to get associated secret: "+err.Error())
-			return
-		}
-		secret.StringData = map[string]string{
-			"username": payload.Username,
-			"password": payload.Password,
-		}
-		_, err = clients.Clientset.CoreV1().Secrets(namespace).Update(context.TODO(), secret, metav1.UpdateOptions{})
-		if err != nil {
-			respondWithError(w, http.StatusInternalServerError, "Failed to update secret: "+err.Error())
-			return
+		// 2. Update the Secret, only if new credentials are provided
+		if payload.Username != "" || payload.Password != "" {
+			secret, err := clients.Clientset.CoreV1().Secrets(namespace).Get(context.TODO(), secretName, metav1.GetOptions{})
+			if err != nil {
+				respondWithError(w, http.StatusInternalServerError, "Failed to get associated secret: "+err.Error())
+				return
+			}
+
+			if secret.StringData == nil {
+				secret.StringData = make(map[string]string)
+			}
+
+			if payload.Username != "" {
+				secret.StringData["username"] = payload.Username
+			}
+			if payload.Password != "" {
+				secret.StringData["password"] = payload.Password
+			}
+			_, err = clients.Clientset.CoreV1().Secrets(namespace).Update(context.TODO(), secret, metav1.UpdateOptions{})
+			if err != nil {
+				respondWithError(w, http.StatusInternalServerError, "Failed to update secret: "+err.Error())
+				return
+			}
 		}
 
 		// 3. Update the VmwareSource
@@ -473,6 +507,32 @@ func HandleGetPlanYAML(clients *K8sClients) http.HandlerFunc {
 		yamlBytes, err := yaml.Marshal(item.Object)
 		if err != nil {
 			respondWithError(w, http.StatusInternalServerError, "Failed to marshal plan to YAML: "+err.Error())
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/yaml")
+		w.WriteHeader(http.StatusOK)
+		w.Write(yamlBytes)
+	}
+}
+
+func HandleGetSourceYAML(clients *K8sClients) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		namespace := vars["namespace"]
+		name := vars["name"]
+
+		log.Infof("Fetching YAML for source %s/%s", namespace, name)
+
+		item, err := clients.Dynamic.Resource(vmwareSourceGVR).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		yamlBytes, err := yaml.Marshal(item.Object)
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Failed to marshal source to YAML: "+err.Error())
 			return
 		}
 

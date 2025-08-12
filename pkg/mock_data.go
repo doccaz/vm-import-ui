@@ -16,15 +16,15 @@ var mockHarvesterNetworks = []map[string]interface{}{
 }
 
 var mockPlans = []map[string]interface{}{
-    {"id": "plan-1", "name": "Migrate Prod Web Servers", "status": "Completed", "vms": 2, "target": "default", "totalSizeGB": 90},
-    {"id": "plan-2", "name": "Import DBs", "status": "In Progress", "vms": 1, "target": "default", "totalSizeGB": 200},
+	{"id": "plan-1", "name": "Migrate Prod Web Servers", "status": "Completed", "vms": 2, "target": "default", "totalSizeGB": 90},
+	{"id": "plan-2", "name": "Import DBs", "status": "In Progress", "vms": 1, "target": "default", "totalSizeGB": 200},
 }
 
 var mockPlanDetails = map[string]interface{}{
-    "id": "plan-2", "name": "Import DBs", "status": "In Progress",
-    "vms": []map[string]interface{}{
-        {"name": "db-vm-prod-01", "status": "Queued", "progress": 0, "diskSizeGB": 200},
-    },
+	"id": "plan-2", "name": "Import DBs", "status": "In Progress",
+	"vms": []map[string]interface{}{
+		{"name": "db-vm-prod-01", "status": "Queued", "progress": 0, "diskSizeGB": 200},
+	},
 }
 
 var mockNamespaces = []map[string]interface{}{

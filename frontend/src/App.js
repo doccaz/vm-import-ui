@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, ChevronRight, Server, Folder, Cloud, HardDrive, ArrowRight, X, Loader, CheckCircle, Clock, Cpu, MemoryStick, Trash2, Play, Edit, AlertTriangle } from 'lucide-react';
+import { Plus, ChevronRight, Server, Folder, Cloud, HardDrive, ArrowRight, X, Loader, CheckCircle, Clock, Cpu, MemoryStick, Trash2, Play, Edit, AlertTriangle, Info } from 'lucide-react';
 
 // --- Helper Functions ---
 const formatBytes = (bytes, decimals = 2) => {
@@ -87,7 +87,7 @@ const ResourceTable = ({ plans, onViewDetails, onRunNow, onDelete }) => (
     </div>
 );
 
-const SourcesTable = ({ sources, onEdit, onDelete }) => (
+const SourcesTable = ({ sources, onEdit, onDelete, onViewDetails }) => (
     <div className="bg-white shadow-md rounded-lg overflow-hidden">
         <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -112,6 +112,7 @@ const SourcesTable = ({ sources, onEdit, onDelete }) => (
                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                                 <button onClick={() => onEdit(source)} title="Edit" className="text-blue-600 hover:text-blue-800"><Edit size={18}/></button>
                                 <button onClick={() => onDelete(source)} title="Delete" className="text-red-600 hover:text-red-800"><Trash2 size={18}/></button>
+                                <button onClick={() => onViewDetails(source)} className="text-blue-600 hover:text-blue-800">Details</button>
                             </td>
                         </tr>
                     ))
@@ -136,6 +137,7 @@ const SourceWizard = ({ onCancel, onSave, source }) => {
             setNamespace(source.metadata.namespace);
             setEndpoint(source.spec.endpoint);
             setDatacenter(source.spec.dc);
+            setUsername(source.spec.username || '');
         }
     }, [source, isEditMode]);
 
@@ -179,6 +181,70 @@ const SourceWizard = ({ onCancel, onSave, source }) => {
                 <div className="p-4 border-t flex justify-end space-x-2">
                     <button onClick={onCancel} className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-md">Cancel</button>
                     <button onClick={handleSubmit} className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-md">Save</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const SourceDetails = ({ source, onClose }) => {
+    const [yamlContent, setYamlContent] = useState('');
+    const [showYaml, setShowYaml] = useState(false);
+    const [isLoadingYaml, setIsLoadingYaml] = useState(false);
+
+    const fetchYaml = async () => {
+        setIsLoadingYaml(true);
+        try {
+            const response = await fetch(`/api/v1/harvester/vmwaresources/${source.metadata.namespace}/${source.metadata.name}/yaml`);
+            const data = await response.text();
+            setYamlContent(data || "Could not generate YAML.");
+        } catch (err) {
+            setYamlContent("Failed to fetch YAML.");
+        } finally {
+            setIsLoadingYaml(false);
+        }
+    };
+
+    const handleShowYaml = () => {
+        if (showYaml) {
+            setShowYaml(false);
+        } else {
+            setShowYaml(true);
+            fetchYaml();
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 z-50">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl flex flex-col max-h-[90vh]">
+                <div className="flex justify-between items-center p-4 border-b">
+                    <h2 className="text-xl font-semibold text-gray-800">{source.metadata.name}</h2>
+                    <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-200">
+                        <X size={20} />
+                    </button>
+                </div>
+                <div className="p-6 space-y-6 overflow-y-auto">
+                    <div>
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">Source Summary</h3>
+                        <div className="p-3 bg-gray-50 rounded-md border text-sm space-y-1">
+                            <p><strong>Endpoint:</strong> {source.spec.endpoint}</p>
+                            <p><strong>Datacenter:</strong> {source.spec.dc}</p>
+                            <p><strong>Credentials Secret:</strong> {source.spec.credentials.namespace}/{source.spec.credentials.name}</p>
+                        </div>
+                    </div>
+                    <div>
+                        <button onClick={handleShowYaml} className="text-sm text-blue-600 hover:underline">
+                            {showYaml ? 'Hide' : 'View'} YAML
+                        </button>
+                        {showYaml && (
+                            <div className="mt-2 p-2 border rounded-md bg-gray-900 text-white font-mono text-xs max-h-64 overflow-y-auto">
+                                <pre>{isLoadingYaml ? 'Loading...' : yamlContent}</pre>
+                            </div>
+                        )}
+                    </div>
+                </div>
+                <div className="p-4 border-t bg-gray-50 text-right rounded-b-lg">
+                    <button onClick={onClose} className="bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 px-4 rounded-md">Close</button>
                 </div>
             </div>
         </div>
@@ -735,12 +801,33 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
     );
 };
 
+const AboutPage = () => (
+    <div>
+        <Header title="About VM Import UI" />
+        <div className="bg-white shadow-md rounded-lg p-6">
+            <h2 className="text-xl font-semibold mb-4">Harvester VM Import UI</h2>
+            <p className="mb-2"><strong>Version:</strong> 0.6.5</p>
+            <p className="mb-4">This UI provides a user-friendly interface for the Harvester VM Import Controller, allowing users to import virtual machines from a VMware vCenter into a Harvester cluster.</p>
+            
+            <h3 className="text-lg font-semibold mb-2">How to Use</h3>
+            <ol className="list-decimal list-inside space-y-2">
+                <li><strong>vCenter Sources Tab:</strong> Before you can import VMs, you must configure a connection to your vCenter. Use the "Create" button to add a new source, providing your vCenter's endpoint, datacenter name, and credentials.</li>
+                <li><strong>Migration Plans Tab:</strong> Once a source is configured, you can create a migration plan. Click "Create", select your vCenter source, and browse the inventory to choose a VM to import.</li>
+                <li><strong>Configuration:</strong> Follow the wizard to configure the plan name, target namespace, storage, and network mappings for the new VM.</li>
+                <li><strong>Scheduling:</strong> You can choose to run the migration immediately or schedule it for a later date and time.</li>
+                <li><strong>Management:</strong> All created plans will appear in the dashboard, where you can run, delete, or view their details and logs.</li>
+            </ol>
+        </div>
+    </div>
+);
+
 export default function App() {
-    const [page, setPage] = useState('plans'); // 'plans', 'sources'
+    const [page, setPage] = useState('plans'); // 'plans', 'sources', 'about'
     const [plans, setPlans] = useState([]);
     const [sources, setSources] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [selectedPlan, setSelectedPlan] = useState(null);
+    const [selectedSource, setSelectedSource] = useState(null);
     const [planToDelete, setPlanToDelete] = useState(null);
     const [planToRun, setPlanToRun] = useState(null);
     const [sourceToEdit, setSourceToEdit] = useState(null);
@@ -882,6 +969,22 @@ export default function App() {
         setSelectedPlan(detailedPlan);
         setPage('planDetails');
     };
+    
+    const handleEditSource = async (source) => {
+        try {
+            const response = await fetch(`/api/v1/harvester/vmwaresources/${source.metadata.namespace}/${source.metadata.name}`);
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error || "Failed to fetch source details");
+            }
+            const data = await response.json();
+            setSourceToEdit(data);
+            setShowSourceWizard(true);
+        } catch (err) {
+            console.error("Failed to fetch source details:", err);
+            alert(`Error fetching source details: ${err.message}`);
+        }
+    };
 
     const renderPage = () => {
         switch (page) {
@@ -889,13 +992,17 @@ export default function App() {
                 return <CreatePlanWizard onCancel={() => setPage('plans')} onCreatePlan={handleCreatePlan} />;
             case 'planDetails':
                 return <PlanDetails plan={selectedPlan} onClose={() => setPage('plans')} />;
+            case 'sourceDetails':
+                return <SourceDetails source={selectedSource} onClose={() => setPage('sources')} />;
             case 'sources':
                 return (
                     <div>
                         <Header title="vCenter Sources" onButtonClick={() => { setSourceToEdit(null); setShowSourceWizard(true); }} />
-                        <SourcesTable sources={sources} onEdit={(source) => { setSourceToEdit(source); setShowSourceWizard(true); }} onDelete={setSourceToDelete} />
+                        <SourcesTable sources={sources} onEdit={handleEditSource} onDelete={setSourceToDelete} onViewDetails={(source) => { setSelectedSource(source); setPage('sourceDetails'); }}/>
                     </div>
                 );
+            case 'about':
+                return <AboutPage />;
             case 'plans':
             default:
                 return (
@@ -912,6 +1019,7 @@ export default function App() {
              <nav className="mb-6 border-b">
                 <button onClick={() => setPage('plans')} className={`px-4 py-2 ${page === 'plans' ? 'border-b-2 border-blue-500' : ''}`}>Migration Plans</button>
                 <button onClick={() => setPage('sources')} className={`px-4 py-2 ${page === 'sources' ? 'border-b-2 border-blue-500' : ''}`}>vCenter Sources</button>
+                <button onClick={() => setPage('about')} className={`px-4 py-2 ${page === 'about' ? 'border-b-2 border-blue-500' : ''}`}>About</button>
             </nav>
             <div className="max-w-7xl mx-auto">
                 {renderPage()}
