@@ -412,18 +412,22 @@ func ListVlanConfigsHandler(clients *K8sClients) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		log.Info("Listing Harvester VlanConfigs")
 		gvr := schema.GroupVersionResource{
-			Group:    "network.harvesterhci.io",
-			Version:  "v1beta1",
-			Resource: "vlanconfigs",
+			Group:    "k8s.cni.cncf.io",
+			Version:  "v1",
+			Resource: "network-attachment-definitions",
 		}
 
-		list, err := clients.Dynamic.Resource(gvr).List(context.TODO(), metav1.ListOptions{})
+		listOptions := metav1.ListOptions{
+			LabelSelector: "network.harvesterhci.io/type=L2VlanNetwork",
+		}
+
+		list, err := clients.Dynamic.Resource(gvr).Namespace("").List(context.TODO(), listOptions)
 		if err != nil {
 			respondWithError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 
-		log.Debugf("Fetched VLAN configs: %+v", list.Items)
+		log.Debugf("Fetched VLAN definitions: %+v", list.Items)
 		respondWithJSON(w, http.StatusOK, list.Items)
 	}
 }

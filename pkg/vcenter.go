@@ -12,6 +12,7 @@ import (
 	"github.com/vmware/govmomi/object"
 	"github.com/vmware/govmomi/property"
 	"github.com/vmware/govmomi/vim25/mo"
+	"github.com/vmware/govmomi/vim25/types"
 )
 
 // InventoryNode represents a generic node in the vCenter inventory tree.
@@ -101,19 +102,43 @@ func processEntity(ctx context.Context, c *govmomi.Client, entity object.Referen
 	switch e := entity.(type) {
 	case *object.VirtualMachine:
 		var mvm mo.VirtualMachine
-		err := pc.RetrieveOne(ctx, ref, []string{"guest.net", "summary.storage", "summary.config"}, &mvm)
+		err := pc.RetrieveOne(ctx, ref, []string{"guest", "summary", "config", "network", "config.hardware.device"}, &mvm)
 		if err != nil {
 			return nil, err
 		}
 
 		log.Debugf("Raw VM data from vCenter for %s: %+v", me.Name, mvm)
 
-		if mvm.Guest != nil {
-			for _, net := range mvm.Guest.Net {
-				node.Networks = append(node.Networks, net.Network)
+		var networkNames []string
+
+		// Get the list of virtual devices from the managed object
+		deviceList := object.VirtualDeviceList(mvm.Config.Hardware.Device)
+
+		// Find all network card devices
+		for _, device := range deviceList {
+			// Use a type assertion to see if the device is a network card
+			if card, ok := device.(types.BaseVirtualEthernetCard); ok {
+				// Get the backing info from the network card
+				backing := card.GetVirtualEthernetCard().Backing
+
+				// --- THIS IS THE CORRECTED PART ---
+				// Use a type switch to handle different network backing types
+				switch backingInfo := backing.(type) {
+				case *types.VirtualEthernetCardNetworkBackingInfo:
+					// This handles standard vSwitch networks
+					networkNames = append(networkNames, backingInfo.DeviceName)
+				case *types.VirtualEthernetCardDistributedVirtualPortBackingInfo:
+					// This handles distributed vSwitch networks
+					// The network name is not directly here, you get a portgroup key
+					networkNames = append(networkNames, backingInfo.Port.PortgroupKey)
+					// Add other cases here if you use other network types (e.g., Opaque networks)
+				}
 			}
 		}
 
+		log.Debugf("Successfully found networks for VM '%s': %v\n", me.Name, networkNames)
+
+		node.Networks = networkNames
 		node.DiskSizeGB = mvm.Summary.Storage.Committed / (1024 * 1024 * 1024)
 		node.CPU = mvm.Summary.Config.NumCpu
 		node.MemoryMB = mvm.Summary.Config.MemorySizeMB

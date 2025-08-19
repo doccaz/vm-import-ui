@@ -473,7 +473,7 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
     };
 
     const fetchNetworks = () => {
-        fetch('/api/v1/harvester/vlanconfigs').then(res => res.json()).then(data => setHarvesterNetworks(data.map(net => net.metadata.name)));
+        fetch('/api/v1/harvester/vlanconfigs').then(res => res.json()).then(data => setHarvesterNetworks(data.map(net => net.metadata.namespace + "/" + net.metadata.name)));
     };
 
     const fetchStorageClasses = () => {
@@ -596,7 +596,7 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
                 storageClass: storageClass,
                 networkMapping: Object.entries(networkMappings).map(([key, value]) => ({
                     sourceNetwork: key,
-                    destinationNetwork: `${finalTargetNamespace}/${value}`,
+                    destinationNetwork: `${value}`,
                 })),
             }
         };
@@ -757,10 +757,22 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
 
 const AboutPage = () => (
     <div>
-        <Header title="About VM Import UI" />
+        <div className="flex justify-between items-center mb-6">
+            <h1 className="text-2xl font-bold text-gray-800"> 
+                About VM Import UI
+            </h1>
+
+            <img 
+                src="/logo-stacked-harvester.svg" 
+                alt="Harvester Logo"     
+                className="h-32 w-32"
+            />
+        </div>
+
+        {/* The rest of your page content remains exactly the same */}
         <div className="bg-white shadow-md rounded-lg p-6">
             <h2 className="text-xl font-semibold mb-4">Harvester VM Import UI</h2>
-            <p className="mb-2"><strong>Version:</strong> 0.6.5</p>
+            <p className="mb-2"><strong>Version:</strong> 0.6.6</p>
             <p className="mb-4">This UI provides a user-friendly interface for the Harvester VM Import Controller, allowing users to import virtual machines from a VMware vCenter into a Harvester cluster.</p>
             
             <h3 className="text-lg font-semibold mb-2">How to Use</h3>
@@ -768,7 +780,7 @@ const AboutPage = () => (
                 <li><strong>vCenter Sources Tab:</strong> Before you can import VMs, you must configure a connection to your vCenter. Use the "Create" button to add a new source, providing your vCenter's endpoint, datacenter name, and credentials.</li>
                 <li><strong>Migration Plans Tab:</strong> Once a source is configured, you can create a migration plan. Click "Create", select your vCenter source, and browse the inventory to choose a VM to import.</li>
                 <li><strong>Configuration:</strong> Follow the wizard to configure the plan name, target namespace, storage, and network mappings for the new VM.</li>
-                <li><strong>Management:</strong> All created plans will appear in the dashboard, where you can run, delete, or view their details and logs.</li>
+                <li><strong>Management:</strong> All created plans will appear in the dashboard, where you can inspect, delete, or view their details and logs.</li>
             </ol>
         </div>
     </div>
