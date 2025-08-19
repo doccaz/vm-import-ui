@@ -4,8 +4,8 @@ This add-on provides a user-friendly web interface for the Harvester VM Import C
 
 # Features
 * Manage vCenter sources directly from the UI (Create/Delete).
-* Select a pre-configured vCenter source to browse its inventory.Create and schedule migration plans for a specific date and time.
-* Manage plans: Run immediately, delete with confirmation.
+* Select a pre-configured vCenter source to browse its inventory.
+* Manage plans: See details or delete with confirmation.
 * Map source vCenter networks to target Harvester VLANs.
 * Select a target Harvester Namespace and StorageClass for imported VMs.
 # Prerequisites (CRITICAL)
