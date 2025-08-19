@@ -1,4 +1,4 @@
-# Harvester VM Import UI Add-on
+# Harvester VM Import UI
 
 This add-on provides a user-friendly web interface for the Harvester VM Import Controller, allowing users to import virtual machines from vCenter into Harvester through a simple, wizard-driven process.
 
