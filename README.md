@@ -44,18 +44,26 @@ Step 4: Access the UI
 Open your web browser and navigate to http://localhost:8080.
 ![Create the VMware source configuration](screenshots/1-create-source.png)
 
+Select the Source VM from the inventory:
 ![Select the source VM](screenshots/2-select-vm.png)
 
+Configure the destination VM:
 ![Configure the destination VM](screenshots/3-config-vms.png)
 
+Select the destination namespace:
 ![Configure the destination namespace for the imported VM](screenshots/3-config-vm.png)
 
+Map the source and destionation networks for the imported VM:
 ![Map the source and destination networks for the imported VM](screenshots/4-map-vlans.png)
 
+A summary will be shown with the actions that will be taken:
 ![Summary of what will be done](screenshots/5-summary.png)
 
+The VM Import Controller objects and created, and the migration process is submitted:
 ![The migration starts](screenshots/6-migration-start.png)
 
+The migration process is monitored:
 ![Migration progress](screenshots/7-migration-progress.png)
 
+And... the VM is created in Harvester!
 ![Migration finished](screenshots/8-migration-finished.png)
