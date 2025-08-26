@@ -58,4 +58,4 @@ Open your web browser and navigate to http://localhost:8080.
 
 ![Migration progress](screenshots/7-migration-progress.png)
 
-![Migration finished](screenshots/6-migration-finished.png)
+![Migration finished](screenshots/8-migration-finished.png)
