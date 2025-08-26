@@ -42,4 +42,20 @@ podman run -p 8080:8080 \
 Step 4: Access the UI
 
 Open your web browser and navigate to http://localhost:8080.
+![Create the VMware source configuration](screenshots/1-create-source.png)
 
+![Select the source VM](screenshots/2-select-vm.png)
+
+![Configure the destination VM](screenshots/3-config-vms.png)
+
+![Configure the destination namespace for the imported VM](screenshots/3-config-vm.png)
+
+![Map the source and destination networks for the imported VM](screenshots/4-map-vlans.png)
+
+![Summary of what will be done](screenshots/5-summary.png)
+
+![The migration starts](screenshots/6-migration-start.png)
+
+![Migration progress](screenshots/7-migration-progress.png)
+
+![Migration finished](screenshots/6-migration-finished.png)
