@@ -9,7 +9,6 @@ This add-on provides a user-friendly web interface for the Harvester VM Import C
 * Map source vCenter networks to target Harvester VLANs.
 * Select a target Harvester Namespace and StorageClass for imported VMs.
 
-
 # Building and Testing
 
 Step 1: Build the Container ImageFrom the project's root directory, build the image using Podman or Docker.
