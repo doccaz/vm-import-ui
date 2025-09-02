@@ -67,3 +67,5 @@ The migration process is monitored:
 
 And... the VM is created in Harvester!
 ![Migration finished](screenshots/8-migration-finished.png)
+
+
