@@ -12,13 +12,11 @@ This add-on provides a user-friendly web interface for the Harvester VM Import C
 
 # Quick Start (TL;DR)
 
-1. Find the Kubeconfig file for your Harvester/SUSE Virtualization cluster.
+1. Find the Kubeconfig file for your Harvester/SUSE Virtualization cluster (click on "Support" at the lower left on UI).
 2. Pull and run the latest version indicating the Kubeconfig file (docker works too):
 ```
 podman run -p 8080:8080 \
-  -v ~/mycluster-config:/kubeconfig:ro \
-  -e KUBECONFIG=/kubeconfig \
-  -e LOG_LEVEL=debug \
+  -v ~/myharvester-kubeconfig:/kubeconfig:ro \
   ghcr.io/doccaz/vm-import-ui:latest
 ```
 3. Open your browser at http://localhost:8080
@@ -81,8 +79,7 @@ To see verbose logs from the backend, set the LOG_LEVEL environment variable.
 Using Podman
 ```
 podman run -p 8080:8080 \
-  -v ~/.kube/config:/kubeconfig:ro \
-  -e KUBECONFIG=/kubeconfig \
+  -v ~/myharvester-kubeconfig:/kubeconfig:ro \
   -e LOG_LEVEL=debug \
   vm-import-ui:local
 ```

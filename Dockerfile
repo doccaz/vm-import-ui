@@ -30,6 +30,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -v -o /go/bin/vm-import-ui .
 # Stage 3: Create the final image
 FROM registry.suse.com/bci/bci-base:latest
 WORKDIR /
+ENV KUBECONFIG="/kubeconfig"
 COPY --from=go-builder /go/bin/vm-import-ui /usr/local/bin/vm-import-ui
 COPY --from=builder /app/build /ui
 EXPOSE 8080
