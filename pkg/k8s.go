@@ -25,10 +25,8 @@ func NewK8sClients() (*K8sClients, error) {
 		var kubeconfig string
 		if kcEnv, ok := os.LookupEnv("KUBECONFIG"); ok {
 			kubeconfig = kcEnv
-		} else if home := os.Getenv("HOME"); home != "" {
-			kubeconfig = filepath.Join(home, ".kube", "config")
 		} else {
-			return nil, err
+			kubeconfig = filepath.Join("/", "kubeconfig")
 		}
 
 		log.Infof("Using out-of-cluster config with kubeconfig from %s", kubeconfig)
