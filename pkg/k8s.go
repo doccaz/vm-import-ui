@@ -38,6 +38,9 @@ func NewK8sClients() (*K8sClients, error) {
 		log.Info("Using in-cluster config.")
 	}
 
+	// This modifies the loaded config to bypass TLS certificate checks.
+	config.TLSClientConfig.Insecure = true
+
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		return nil, err
