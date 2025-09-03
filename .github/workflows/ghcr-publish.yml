@@ -29,10 +29,15 @@ jobs:
         registry: ghcr.io
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-    - name: Build and push
+    - name: Build and push amd64
       uses: docker/build-push-action@v6
       with:
         push: true
         tags: ghcr.io/doccaz/vm-import-ui:latest
         platforms: linux/amd64
-
+    - name: Build and push ARM64
+      uses: docker/build-push-action@v6
+      with:
+        push: true
+        tags: ghcr.io/doccaz/vm-import-ui:latest
+        platforms: linux/arm64
