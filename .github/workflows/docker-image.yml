@@ -8,14 +8,29 @@ jobs:
   build:
     runs-on: self-hosted
     steps:
-    - uses: actions/checkout@v3
+    - name: Checkout Repository
+      uses: actions/checkout@v3
+
+    # Step 1: Login to Docker Hub
     - name: Login to Docker Hub
-      uses: docker/login-action@v2
+      uses: docker/login-action@v3
       with:
         username: ${{ secrets.DOCKERHUB_USERNAME }}
         password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+    # Step 2: Set up Docker Buildx
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    # Step 3: Build and push the multi-platform image
     - name: Build and push
-      uses: docker/build-push-action@v4
+      uses: docker/build-push-action@v6
       with:
+        context: .
         push: true
+        # Add this line to build for both architectures
+        platforms: linux/amd64,linux/arm64
         tags: ericosuse/vm-import-ui:latest
+        # Optional but recommended for faster builds
+        cache-from: type=gha,scope=build-vm-import-ui
+        cache-to: type=gha,scope=build-vm-import-ui,mode=max
