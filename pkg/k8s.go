@@ -40,6 +40,7 @@ func NewK8sClients() (*K8sClients, error) {
 
 	// This modifies the loaded config to bypass TLS certificate checks.
 	config.TLSClientConfig.Insecure = true
+	config.CertificateAuthorityData = nil
 
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
