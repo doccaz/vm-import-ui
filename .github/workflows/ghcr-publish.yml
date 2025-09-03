@@ -14,11 +14,10 @@ jobs:
     - name: Checkout Repository
       uses: actions/checkout@v3
 
-    # 1. Set up QEMU for emulation
-    - name: Set up QEMU
-      uses: docker/setup-qemu-action@v3
+    # QEMU is no longer needed, so we remove this step
+    # - name: Set up QEMU
+    #   uses: docker/setup-qemu-action@v3
 
-    # 2. Set up Docker Buildx
     - name: Set up Docker Buildx
       id: buildx
       uses: docker/setup-buildx-action@v3
@@ -29,15 +28,16 @@ jobs:
         registry: ghcr.io
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
-    - name: Build and push amd64
+
+    # Combine both platforms into a single build and push step
+    - name: Build and push Multi-Platform Image
       uses: docker/build-push-action@v6
       with:
+        context: .
         push: true
+        # List all target platforms here
+        platforms: linux/amd64,linux/arm64
         tags: ghcr.io/doccaz/vm-import-ui:latest
-        platforms: linux/amd64
-    - name: Build and push ARM64
-      uses: docker/build-push-action@v6
-      with:
-        push: true
-        tags: ghcr.io/doccaz/vm-import-ui:latest
-        platforms: linux/arm64
+        # Optional but highly recommended: add caching to speed up builds
+        cache-from: type=gha,scope=build-vm-import-ui
+        cache-to: type=gha,scope=build-vm-import-ui,mode=max
