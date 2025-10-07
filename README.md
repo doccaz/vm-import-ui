@@ -84,4 +84,14 @@ podman run -p 8080:8080 \
   vm-import-ui:local
 ```
 
+# Workarounds
+
+In one case, the VSphere host (with a .lan domain) was not being correctly resolved by podman's internal DNS. You can overrride the internal resolv.conf to point to your own DNS like this:
+
+```
+podman run -p 8080:8080 \
+  -v ~/myharvester-kubeconfig:/kubeconfig:ro \
+  -v /etc/resolv.conf:/etc/resolv.conf:ro \
+  ghcr.io/doccaz/vm-import-ui:latest
+```
 
