@@ -18,7 +18,7 @@ func main() {
 	}
 	log.SetLevel(logLevel)
 
-	log.Info("Starting VM Import UI Backend v0.6.5")
+	log.Info("Starting VM Import UI Backend v0.8.0")
 
 	k8sClients, err := NewK8sClients()
 	if err != nil && os.Getenv("USE_MOCK_DATA") != "true" {

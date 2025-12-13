@@ -24,6 +24,7 @@ type InventoryNode struct {
 	CPU        int32           `json:"cpu,omitempty"`
 	MemoryMB   int32           `json:"memoryMB,omitempty"`
 	DiskSizeGB int64           `json:"diskSizeGB,omitempty"`
+	Folder     string          `json:"folder,omitempty"`
 }
 
 // GetVCenterInventory connects to vCenter and returns the inventory tree.
@@ -70,7 +71,8 @@ func GetVCenterInventory(ctx context.Context, creds VCenterCredentials) (*Invent
 	}
 
 	for _, child := range children {
-		node, err := processEntity(ctx, c, child)
+		// Initialize recursion with an empty folder path
+		node, err := processEntity(ctx, c, child, "")
 		if err != nil {
 			log.Warnf("Could not process entity %s: %v", child.Reference().Value, err)
 			continue
@@ -85,7 +87,7 @@ func GetVCenterInventory(ctx context.Context, creds VCenterCredentials) (*Invent
 }
 
 // processEntity recursively processes vCenter inventory objects.
-func processEntity(ctx context.Context, c *govmomi.Client, entity object.Reference) (*InventoryNode, error) {
+func processEntity(ctx context.Context, c *govmomi.Client, entity object.Reference, folderPath string) (*InventoryNode, error) {
 	ref := entity.Reference()
 
 	var me mo.ManagedEntity
@@ -121,17 +123,13 @@ func processEntity(ctx context.Context, c *govmomi.Client, entity object.Referen
 				// Get the backing info from the network card
 				backing := card.GetVirtualEthernetCard().Backing
 
-				// --- THIS IS THE CORRECTED PART ---
-				// Use a type switch to handle different network backing types
 				switch backingInfo := backing.(type) {
 				case *types.VirtualEthernetCardNetworkBackingInfo:
 					// This handles standard vSwitch networks
 					networkNames = append(networkNames, backingInfo.DeviceName)
 				case *types.VirtualEthernetCardDistributedVirtualPortBackingInfo:
 					// This handles distributed vSwitch networks
-					// The network name is not directly here, you get a portgroup key
 					networkNames = append(networkNames, backingInfo.Port.PortgroupKey)
-					// Add other cases here if you use other network types (e.g., Opaque networks)
 				}
 			}
 		}
@@ -142,15 +140,22 @@ func processEntity(ctx context.Context, c *govmomi.Client, entity object.Referen
 		node.DiskSizeGB = mvm.Summary.Storage.Committed / (1024 * 1024 * 1024)
 		node.CPU = mvm.Summary.Config.NumCpu
 		node.MemoryMB = mvm.Summary.Config.MemorySizeMB
+		node.Folder = folderPath // Store the accumulated folder path
 		return node, nil
 
 	case *object.Folder:
+		// Build the path: parent/current
+		childPath := me.Name
+		if folderPath != "" {
+			childPath = folderPath + "/" + me.Name
+		}
+
 		children, err := e.Children(ctx)
 		if err != nil {
 			return nil, err
 		}
 		for _, child := range children {
-			childNode, err := processEntity(ctx, c, child)
+			childNode, err := processEntity(ctx, c, child, childPath)
 			if err != nil {
 				log.Warnf("Could not process child entity %s: %v", child.Reference().Value, err)
 				continue
@@ -172,7 +177,8 @@ func processEntity(ctx context.Context, c *govmomi.Client, entity object.Referen
 			return nil, err
 		}
 		for _, vmRef := range mrp.Vm {
-			childNode, err := processEntity(ctx, c, object.NewVirtualMachine(c.Client, vmRef))
+			// Pass the existing folderPath through clusters
+			childNode, err := processEntity(ctx, c, object.NewVirtualMachine(c.Client, vmRef), folderPath)
 			if err != nil {
 				log.Warnf("Could not process child vm in cluster %s: %v", vmRef.Value, err)
 				continue

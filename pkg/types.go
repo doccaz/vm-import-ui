@@ -12,6 +12,12 @@ type VirtualMachineImportSpec struct {
 	NetworkMapping     []NetworkMapping `json:"networkMapping,omitempty"`
 	StorageClass       string           `json:"storageClass,omitempty"`
 	Schedule           *metav1.Time     `json:"schedule,omitempty"`
+
+	// New fields for folder support and advanced options
+	Folder                         string `json:"folder,omitempty"`
+	ForcePowerOff                  bool   `json:"forcePowerOff,omitempty"`
+	GracefulShutdownTimeoutSeconds int    `json:"gracefulShutdownTimeoutSeconds,omitempty"`
+	DefaultNetworkInterfaceModel   string `json:"defaultNetworkInterfaceModel,omitempty"`
 }
 
 type SourceCluster struct {
@@ -24,6 +30,8 @@ type SourceCluster struct {
 type NetworkMapping struct {
 	SourceNetwork      string `json:"sourceNetwork"`
 	DestinationNetwork string `json:"destinationNetwork"`
+	// New field for per-interface model selection
+	NetworkInterfaceModel string `json:"networkInterfaceModel,omitempty"`
 }
 
 // VirtualMachineImportStatus defines the observed state of VirtualMachineImport

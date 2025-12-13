@@ -310,15 +310,20 @@ const PlanDetails = ({ plan, onClose }) => {
                         <div className="p-3 bg-gray-50 rounded-md border text-sm space-y-2">
                             <div className="flex items-center">
                                 <Cpu size={16} className="mr-2 text-gray-600" />
-                                <span>{plan.vms[0]?.cpu || 'N/A'} vCPU(s)</span>
+                                <span>{plan.vms?.[0]?.cpu || 'N/A'} vCPU(s)</span>
                             </div>
                             <div className="flex items-center">
                                 <MemoryStick size={16} className="mr-2 text-gray-600" />
-                                <span>{formatBytes((plan.vms[0]?.memoryMB || 0) * 1024 * 1024, 0)} Memory</span>
+                                <span>{formatBytes((plan.vms?.[0]?.memoryMB || 0) * 1024 * 1024, 0)} Memory</span>
                             </div>
                             <div className="flex items-center">
                                 <HardDrive size={16} className="mr-2 text-gray-600" />
-                                <span>{plan.vms[0]?.diskSizeGB || 'N/A'} GB Storage</span>
+                                <span>{plan.vms?.[0]?.diskSizeGB || 'N/A'} GB Storage</span>
+                            </div>
+                            {/* Added Folder Display */}
+                            <div className="flex items-center">
+                                <Folder size={16} className="mr-2 text-gray-600" />
+                                <span>{plan.spec?.folder || '/'}</span>
                             </div>
                         </div>
                     </div>
@@ -328,6 +333,11 @@ const PlanDetails = ({ plan, onClose }) => {
                             <p><strong>VM Name:</strong> {plan.spec?.virtualMachineName || 'N/A'}</p>
                             <p><strong>Source:</strong> {plan.spec?.sourceCluster?.namespace}/{plan.spec?.sourceCluster?.name || 'N/A'}</p>
                             <p><strong>Storage Class:</strong> {plan.spec?.storageClass || 'N/A'}</p>
+                            
+                            {/* Added Advanced Options Display */}
+                            {plan.spec?.forcePowerOff && <p><strong>Force Power Off:</strong> Yes</p>}
+                            {plan.spec?.gracefulShutdownTimeoutSeconds > 0 && <p><strong>Shutdown Timeout:</strong> {plan.spec.gracefulShutdownTimeoutSeconds}s</p>}
+                            {plan.spec?.defaultNetworkInterfaceModel && <p><strong>Default Interface:</strong> {plan.spec.defaultNetworkInterfaceModel}</p>}
                         </div>
                     </div>
                     <div>
@@ -428,6 +438,11 @@ const VmDetailsPanel = ({ vm }) => {
                     <HardDrive size={16} className="mr-2 text-gray-600" />
                     <span>{vm.diskSizeGB || 'N/A'} GB Storage</span>
                 </div>
+                {/* Added Folder Display */}
+                <div className="flex items-center">
+                    <Folder size={16} className="mr-2 text-gray-600" />
+                    <span>{vm.folder || '/'}</span>
+                </div>
                 <div>
                     <h4 className="font-medium text-gray-800 mt-4 mb-1">Networks</h4>
                     <ul className="list-disc list-inside pl-2">
@@ -453,10 +468,19 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
     const [namespaces, setNamespaces] = useState([]);
     const [existingVmNames, setExistingVmNames] = useState([]);
     const [vmNameConflict, setVmNameConflict] = useState(false);
+    
+    // Updated state for mappings
     const [networkMappings, setNetworkMappings] = useState({});
+    const [networkModels, setNetworkModels] = useState({}); // New state for per-network models
+    
     const [harvesterNetworks, setHarvesterNetworks] = useState([]);
     const [storageClass, setStorageClass] = useState('');
     const [storageClasses, setStorageClasses] = useState([]);
+    
+    // New state for advanced options
+    const [forcePowerOff, setForcePowerOff] = useState(false);
+    const [shutdownTimeout, setShutdownTimeout] = useState('');
+    const [defaultModel, setDefaultModel] = useState('');
 
     const fetchNamespaces = () => {
         fetch('/api/v1/harvester/namespaces')
@@ -538,7 +562,7 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
         }
     };
 
-    const sourceNetworks = React.useMemo(() => {
+    const sourceNetworks = useMemo(() => {
         if (!selectedVm) return [];
         return selectedVm.networks || [];
     }, [selectedVm]);
@@ -597,7 +621,14 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
                 networkMapping: Object.entries(networkMappings).map(([key, value]) => ({
                     sourceNetwork: key,
                     destinationNetwork: `${value}`,
+                    // Add specific network model if selected
+                    networkInterfaceModel: networkModels[key] || undefined
                 })),
+                // New Advanced Options and Folder
+                folder: selectedVm.folder,
+                forcePowerOff: forcePowerOff,
+                gracefulShutdownTimeoutSeconds: shutdownTimeout ? parseInt(shutdownTimeout) : undefined,
+                defaultNetworkInterfaceModel: defaultModel || undefined
             }
         };
 
@@ -681,6 +712,51 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
                                 </select>
                             </div>
                         </div>
+
+                        {/* New Advanced Options Section */}
+                        <div className="mt-6 border-t pt-4">
+                            <h4 className="text-md font-medium text-gray-900 mb-3">Advanced Options</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-4 rounded-md border">
+                                <div className="flex items-center">
+                                    <input
+                                        id="forcePowerOff"
+                                        type="checkbox"
+                                        checked={forcePowerOff}
+                                        onChange={e => setForcePowerOff(e.target.checked)}
+                                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                    />
+                                    <label htmlFor="forcePowerOff" className="ml-2 block text-sm text-gray-700">
+                                        Force Power Off Source VM
+                                        <p className="text-xs text-gray-500 mt-0.5">Required if VMware Tools is not installed.</p>
+                                    </label>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Graceful Shutdown Timeout (Seconds)</label>
+                                    <input
+                                        type="number"
+                                        value={shutdownTimeout}
+                                        onChange={e => setShutdownTimeout(e.target.value)}
+                                        placeholder="e.g. 300"
+                                        className="mt-1 block w-full form-input text-sm"
+                                    />
+                                </div>
+                                <div className="md:col-span-2">
+                                    <label className="block text-sm font-medium text-gray-700">Default Network Interface Model</label>
+                                    <select
+                                        value={defaultModel}
+                                        onChange={e => setDefaultModel(e.target.value)}
+                                        className="mt-1 block w-full form-select text-sm"
+                                    >
+                                        <option value="">Auto (Default)</option>
+                                        <option value="e1000">e1000</option>
+                                        <option value="e1000e">e1000e</option>
+                                        <option value="virtio">virtio</option>
+                                        <option value="vmxnet3">vmxnet3</option>
+                                    </select>
+                                    <p className="text-xs text-gray-500 mt-1">Applies to all interfaces unless overridden in the next step.</p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 );
             case 3:
@@ -694,15 +770,38 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
                         {harvesterNetworks.length === 0 ? (
                             <p className="text-sm text-gray-500">No VLANs defined in Harvester.</p>
                         ) : (
-                            <div className="space-y-3">
+                            <div className="space-y-4">
                                 {sourceNetworks.map(net => (
-                                    <div key={net} className="grid grid-cols-3 items-center gap-4">
-                                        <span className="font-mono text-sm text-gray-800">{net}</span>
-                                        <ArrowRight className="mx-auto text-gray-400" />
-                                        <select onChange={e => setNetworkMappings(prev => ({...prev, [net]: e.target.value}))} className="form-select">
-                                            <option>Select Harvester Network</option>
-                                            {harvesterNetworks.map(hnet => <option key={hnet} value={hnet}>{hnet}</option>)}
-                                        </select>
+                                    <div key={net} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center border-b pb-4 mb-2 last:border-0 last:pb-0">
+                                        <div className="md:col-span-4 font-mono text-sm text-gray-800 break-all flex items-center">
+                                            <div className="bg-gray-200 text-gray-600 px-2 py-1 rounded text-xs mr-2">Source</div>
+                                            {net}
+                                        </div>
+                                        <div className="md:col-span-1 text-center hidden md:block">
+                                            <ArrowRight className="mx-auto text-gray-400" />
+                                        </div>
+                                        <div className="md:col-span-4">
+                                            <select 
+                                                onChange={e => setNetworkMappings(prev => ({...prev, [net]: e.target.value}))} 
+                                                className="form-select w-full text-sm"
+                                            >
+                                                <option>Select Harvester Network</option>
+                                                {harvesterNetworks.map(hnet => <option key={hnet} value={hnet}>{hnet}</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="md:col-span-3">
+                                             <select
+                                                onChange={e => setNetworkModels(prev => ({...prev, [net]: e.target.value}))}
+                                                className="form-select w-full text-sm text-gray-600"
+                                                title="Specific Interface Model"
+                                            >
+                                                <option value="">Default Model</option>
+                                                <option value="e1000">e1000</option>
+                                                <option value="e1000e">e1000e</option>
+                                                <option value="virtio">virtio</option>
+                                                <option value="vmxnet3">vmxnet3</option>
+                                            </select>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -718,16 +817,34 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
                             <div><strong>Destination VM Name:</strong> {selectedVm.name}</div>
                             <div><strong>Target Namespace:</strong> {targetNamespace === 'create_new' ? `${newNamespace} (new)` : targetNamespace}</div>
                             <div><strong>Storage Class:</strong> {storageClass}</div>
+                            
+                            {/* Review Advanced Options */}
+                            {(forcePowerOff || shutdownTimeout || defaultModel) && (
+                                <div className="mt-2 p-2 bg-yellow-50 rounded border border-yellow-100">
+                                    <h4 className="font-medium text-yellow-800">Advanced Settings:</h4>
+                                    <ul className="list-disc list-inside pl-2 text-yellow-800">
+                                        {forcePowerOff && <li>Force Power Off: Enabled</li>}
+                                        {shutdownTimeout && <li>Shutdown Timeout: {shutdownTimeout}s</li>}
+                                        {defaultModel && <li>Default Interface: {defaultModel}</li>}
+                                    </ul>
+                                </div>
+                            )}
+
                             <div>
                                 <h4 className="font-medium mt-2">VM to Migrate:</h4>
                                 <ul className="list-disc list-inside pl-4">
-                                    <li>{selectedVm?.name}</li>
+                                    <li>{selectedVm?.name} <span className="text-gray-500 text-xs">(Folder: {selectedVm?.folder || '/'})</span></li>
                                 </ul>
                             </div>
                             <div>
                                 <h4 className="font-medium mt-2">Network Mappings:</h4>
                                 <ul className="list-disc list-inside pl-4">
-                                    {Object.entries(networkMappings).map(([key, value]) => <li key={key}>{key} &rarr; {value}</li>)}
+                                    {Object.entries(networkMappings).map(([key, value]) => (
+                                        <li key={key}>
+                                            {key} &rarr; {value} 
+                                            {networkModels[key] && <span className="text-xs text-gray-500 ml-2">[{networkModels[key]}]</span>}
+                                        </li>
+                                    ))}
                                 </ul>
                             </div>
                         </div>
@@ -769,10 +886,9 @@ const AboutPage = () => (
             />
         </div>
 
-        {/* The rest of your page content remains exactly the same */}
         <div className="bg-white shadow-md rounded-lg p-6">
             <h2 className="text-xl font-semibold mb-4">Harvester VM Import UI</h2>
-            <p className="mb-2"><strong>Version:</strong> 0.6.6</p>
+            <p className="mb-2"><strong>Version:</strong> 0.8.0</p>
             <p className="mb-4">This UI provides a user-friendly interface for the Harvester VM Import Controller, allowing users to import virtual machines from a VMware vCenter into a Harvester cluster.</p>
             
             <h3 className="text-lg font-semibold mb-2">How to Use</h3>
@@ -811,7 +927,7 @@ export default function App() {
             setPlans(data || []);
         } catch (err) {
             console.error("Failed to fetch plans:", err);
-            alert(`Error fetching plans: ${err.message}`);
+            // alert(`Error fetching plans: ${err.message}`);
             setPlans([]); // Ensure plans is an array on error
         } finally {
             setIsLoading(false);
@@ -829,7 +945,7 @@ export default function App() {
             setSources(data || []);
         } catch (err) {
             console.error("Failed to fetch sources:", err);
-            alert(`Error fetching sources: ${err.message}`);
+            // alert(`Error fetching sources: ${err.message}`);
         }
     };
 
@@ -913,6 +1029,7 @@ export default function App() {
         const detailedPlan = {
             ...plan,
             name: plan.metadata.name,
+            // Mock data for VM spec if it's missing in the list view return
             vms: [{
                 name: plan.spec.virtualMachineName,
                 status: getPlanStatus(plan),
