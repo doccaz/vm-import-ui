@@ -454,7 +454,8 @@ const VmDetailsPanel = ({ vm }) => {
     );
 };
 
-const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
+// --- UPDATED WIZARD COMPONENT ---
+const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
     const [step, setStep] = useState(1);
     const [vmwareSources, setVmwareSources] = useState([]);
     const [selectedSource, setSelectedSource] = useState("");
@@ -602,6 +603,8 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
         }
         
         const [sourceNamespace, sourceName] = selectedSource.split('/');
+        
+        // Construct the plan object
         const plan = {
             apiVersion: "migration.harvesterhci.io/v1beta1",
             kind: "VirtualMachineImport",
@@ -621,16 +624,23 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
                 networkMapping: Object.entries(networkMappings).map(([key, value]) => ({
                     sourceNetwork: key,
                     destinationNetwork: `${value}`,
-                    // Add specific network model if selected
-                    networkInterfaceModel: networkModels[key] || undefined
+                    // Only add networkInterfaceModel if advanced features are enabled
+                    networkInterfaceModel: capabilities.hasAdvancedPower ? (networkModels[key] || undefined) : undefined
                 })),
-                // New Advanced Options and Folder
                 folder: selectedVm.folder,
-                forcePowerOff: forcePowerOff,
-                gracefulShutdownTimeoutSeconds: shutdownTimeout ? parseInt(shutdownTimeout) : undefined,
-                defaultNetworkInterfaceModel: defaultModel || undefined
             }
         };
+
+        // Only attach advanced fields if the cluster supports them
+        if (capabilities.hasAdvancedPower) {
+            plan.spec.forcePowerOff = forcePowerOff;
+            if (shutdownTimeout) {
+                plan.spec.gracefulShutdownTimeoutSeconds = parseInt(shutdownTimeout);
+            }
+            if (defaultModel) {
+                plan.spec.defaultNetworkInterfaceModel = defaultModel;
+            }
+        }
 
         onCreatePlan(plan);
     };
@@ -681,6 +691,21 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
                             <button onClick={() => {fetchNamespaces(); fetchStorageClasses();}} className="text-blue-500 hover:text-blue-700"><RefreshCw size={16}/></button>
                         </div>
                         <p className="text-sm text-gray-600 mb-4">Define the migration plan details and target resources.</p>
+                        
+                        {/* WARNING BANNER if capabilities are missing */}
+                        {(!capabilities.hasAdvancedPower && capabilities.harvesterVersion) && (
+                             <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-md flex items-start">
+                                <AlertTriangle className="text-yellow-500 w-5 h-5 mr-2 mt-0.5" />
+                                <div>
+                                    <h4 className="text-sm font-semibold text-yellow-800">Compatibility Mode</h4>
+                                    <p className="text-sm text-yellow-700 mt-1">
+                                        You are connected to Harvester <strong>{capabilities.harvesterVersion}</strong>. 
+                                        Advanced options (Force Power Off, Interface Models) require Harvester v1.6.0+ and have been hidden.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+
                         <div className="space-y-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700">Plan Name</label>
@@ -713,50 +738,52 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
                             </div>
                         </div>
 
-                        {/* New Advanced Options Section */}
-                        <div className="mt-6 border-t pt-4">
-                            <h4 className="text-md font-medium text-gray-900 mb-3">Advanced Options</h4>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-4 rounded-md border">
-                                <div className="flex items-center">
-                                    <input
-                                        id="forcePowerOff"
-                                        type="checkbox"
-                                        checked={forcePowerOff}
-                                        onChange={e => setForcePowerOff(e.target.checked)}
-                                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                                    />
-                                    <label htmlFor="forcePowerOff" className="ml-2 block text-sm text-gray-700">
-                                        Force Power Off Source VM
-                                        <p className="text-xs text-gray-500 mt-0.5">Required if VMware Tools is not installed.</p>
-                                    </label>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700">Graceful Shutdown Timeout (Seconds)</label>
-                                    <input
-                                        type="number"
-                                        value={shutdownTimeout}
-                                        onChange={e => setShutdownTimeout(e.target.value)}
-                                        placeholder="e.g. 300"
-                                        className="mt-1 block w-full form-input text-sm"
-                                    />
-                                </div>
-                                <div className="md:col-span-2">
-                                    <label className="block text-sm font-medium text-gray-700">Default Network Interface Model</label>
-                                    <select
-                                        value={defaultModel}
-                                        onChange={e => setDefaultModel(e.target.value)}
-                                        className="mt-1 block w-full form-select text-sm"
-                                    >
-                                        <option value="">Auto (Default)</option>
-                                        <option value="e1000">e1000</option>
-                                        <option value="e1000e">e1000e</option>
-                                        <option value="virtio">virtio</option>
-                                        <option value="vmxnet3">vmxnet3</option>
-                                    </select>
-                                    <p className="text-xs text-gray-500 mt-1">Applies to all interfaces unless overridden in the next step.</p>
+                        {/* New Advanced Options Section - CONDITIONAL RENDERING */}
+                        {capabilities.hasAdvancedPower && (
+                            <div className="mt-6 border-t pt-4">
+                                <h4 className="text-md font-medium text-gray-900 mb-3">Advanced Options</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-4 rounded-md border">
+                                    <div className="flex items-center">
+                                        <input
+                                            id="forcePowerOff"
+                                            type="checkbox"
+                                            checked={forcePowerOff}
+                                            onChange={e => setForcePowerOff(e.target.checked)}
+                                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                        />
+                                        <label htmlFor="forcePowerOff" className="ml-2 block text-sm text-gray-700">
+                                            Force Power Off Source VM
+                                            <p className="text-xs text-gray-500 mt-0.5">Required if VMware Tools is not installed.</p>
+                                        </label>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700">Graceful Shutdown Timeout (Seconds)</label>
+                                        <input
+                                            type="number"
+                                            value={shutdownTimeout}
+                                            onChange={e => setShutdownTimeout(e.target.value)}
+                                            placeholder="e.g. 300"
+                                            className="mt-1 block w-full form-input text-sm"
+                                        />
+                                    </div>
+                                    <div className="md:col-span-2">
+                                        <label className="block text-sm font-medium text-gray-700">Default Network Interface Model</label>
+                                        <select
+                                            value={defaultModel}
+                                            onChange={e => setDefaultModel(e.target.value)}
+                                            className="mt-1 block w-full form-select text-sm"
+                                        >
+                                            <option value="">Auto (Default)</option>
+                                            <option value="e1000">e1000</option>
+                                            <option value="e1000e">e1000e</option>
+                                            <option value="virtio">virtio</option>
+                                            <option value="vmxnet3">vmxnet3</option>
+                                        </select>
+                                        <p className="text-xs text-gray-500 mt-1">Applies to all interfaces unless overridden in the next step.</p>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+                        )}
                     </div>
                 );
             case 3:
@@ -789,19 +816,23 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
                                                 {harvesterNetworks.map(hnet => <option key={hnet} value={hnet}>{hnet}</option>)}
                                             </select>
                                         </div>
-                                        <div className="md:col-span-3">
-                                             <select
-                                                onChange={e => setNetworkModels(prev => ({...prev, [net]: e.target.value}))}
-                                                className="form-select w-full text-sm text-gray-600"
-                                                title="Specific Interface Model"
-                                            >
-                                                <option value="">Default Model</option>
-                                                <option value="e1000">e1000</option>
-                                                <option value="e1000e">e1000e</option>
-                                                <option value="virtio">virtio</option>
-                                                <option value="vmxnet3">vmxnet3</option>
-                                            </select>
-                                        </div>
+                                        
+                                        {/* Conditional Rendering for Per-Interface Model */}
+                                        {capabilities.hasAdvancedPower && (
+                                            <div className="md:col-span-3">
+                                                 <select
+                                                    onChange={e => setNetworkModels(prev => ({...prev, [net]: e.target.value}))}
+                                                    className="form-select w-full text-sm text-gray-600"
+                                                    title="Specific Interface Model"
+                                                >
+                                                    <option value="">Default Model</option>
+                                                    <option value="e1000">e1000</option>
+                                                    <option value="e1000e">e1000e</option>
+                                                    <option value="virtio">virtio</option>
+                                                    <option value="vmxnet3">vmxnet3</option>
+                                                </select>
+                                            </div>
+                                        )}
                                     </div>
                                 ))}
                             </div>
@@ -818,8 +849,8 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
                             <div><strong>Target Namespace:</strong> {targetNamespace === 'create_new' ? `${newNamespace} (new)` : targetNamespace}</div>
                             <div><strong>Storage Class:</strong> {storageClass}</div>
                             
-                            {/* Review Advanced Options */}
-                            {(forcePowerOff || shutdownTimeout || defaultModel) && (
+                            {/* Review Advanced Options - Conditional */}
+                            {capabilities.hasAdvancedPower && (forcePowerOff || shutdownTimeout || defaultModel) && (
                                 <div className="mt-2 p-2 bg-yellow-50 rounded border border-yellow-100">
                                     <h4 className="font-medium text-yellow-800">Advanced Settings:</h4>
                                     <ul className="list-disc list-inside pl-2 text-yellow-800">
@@ -842,7 +873,8 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan }) => {
                                     {Object.entries(networkMappings).map(([key, value]) => (
                                         <li key={key}>
                                             {key} &rarr; {value} 
-                                            {networkModels[key] && <span className="text-xs text-gray-500 ml-2">[{networkModels[key]}]</span>}
+                                            {/* Show model only if capabilities are enabled */}
+                                            {capabilities.hasAdvancedPower && networkModels[key] && <span className="text-xs text-gray-500 ml-2">[{networkModels[key]}]</span>}
                                         </li>
                                     ))}
                                 </ul>
@@ -888,7 +920,7 @@ const AboutPage = () => (
 
         <div className="bg-white shadow-md rounded-lg p-6">
             <h2 className="text-xl font-semibold mb-4">Harvester VM Import UI</h2>
-            <p className="mb-2"><strong>Version:</strong> 0.8.0</p>
+            <p className="mb-2"><strong>Version:</strong> 1.0.5</p>
             <p className="mb-4">This UI provides a user-friendly interface for the Harvester VM Import Controller, allowing users to import virtual machines from a VMware vCenter into a Harvester cluster.</p>
             
             <h3 className="text-lg font-semibold mb-2">How to Use</h3>
@@ -914,6 +946,20 @@ export default function App() {
     const [sourceToDelete, setSourceToDelete] = useState(null);
     const [showSourceWizard, setShowSourceWizard] = useState(false);
     const [refreshInterval, setRefreshInterval] = useState(10);
+    
+    // NEW: Capability State
+    const [capabilities, setCapabilities] = useState({ harvesterVersion: '', hasAdvancedPower: false });
+
+    // NEW: Fetch Capabilities on Mount
+    useEffect(() => {
+        fetch('/api/v1/capabilities')
+            .then(res => res.json())
+            .then(data => {
+                console.log("Cluster Capabilities:", data);
+                setCapabilities(data);
+            })
+            .catch(err => console.error("Failed to fetch capabilities:", err));
+    }, []);
 
     const fetchPlans = async () => {
         setIsLoading(true);
@@ -1062,7 +1108,8 @@ export default function App() {
     const renderPage = () => {
         switch (page) {
             case 'createPlan':
-                return <CreatePlanWizard onCancel={() => setPage('plans')} onCreatePlan={handleCreatePlan} />;
+                // PASS CAPABILITIES PROP HERE
+                return <CreatePlanWizard onCancel={() => setPage('plans')} onCreatePlan={handleCreatePlan} capabilities={capabilities} />;
             case 'planDetails':
                 return <PlanDetails plan={selectedPlan} onClose={() => setPage('plans')} />;
             case 'sourceDetails':

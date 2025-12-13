@@ -35,6 +35,12 @@ var (
 		Version:  "v1",
 		Resource: "virtualmachines",
 	}
+	// NEW: To check cluster version
+	settingsGVR = schema.GroupVersionResource{
+		Group:    "harvesterhci.io",
+		Version:  "v1beta1",
+		Resource: "settings",
+	}
 )
 
 // Helper to respond with JSON
@@ -48,6 +54,43 @@ func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
 // Helper to respond with a JSON error
 func respondWithError(w http.ResponseWriter, code int, message string) {
 	respondWithJSON(w, code, map[string]string{"error": message})
+}
+
+// NEW: Capability configuration to send to frontend
+type CapabilityConfig struct {
+	HarvesterVersion string `json:"harvesterVersion"`
+	HasAdvancedPower bool   `json:"hasAdvancedPower"` // v1.6.0+
+}
+
+// NEW: Handler to check Harvester version and features
+func GetCapabilitiesHandler(clients *K8sClients) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		// 1. Fetch the 'server-version' setting
+		setting, err := clients.Dynamic.Resource(settingsGVR).Get(context.TODO(), "server-version", metav1.GetOptions{})
+		if err != nil {
+			// If we fail to check (e.g., permissions or very old cluster), assume old version
+			log.Warnf("Could not determine Harvester version: %v", err)
+			respondWithJSON(w, http.StatusOK, CapabilityConfig{HarvesterVersion: "unknown", HasAdvancedPower: false})
+			return
+		}
+
+		// 2. Extract the value
+		version, _, _ := unstructured.NestedString(setting.Object, "value")
+
+		// 3. Check logic: Is this v1.6.0 or newer?
+		// Simple check looks for "v1.6", "v1.7", "master" or newer versions.
+		hasAdvanced := strings.Contains(version, "v1.6") ||
+			strings.Contains(version, "v1.7") ||
+			strings.Contains(version, "v1.8") ||
+			strings.Contains(version, "v1.9") ||
+			strings.Contains(version, "master")
+
+		respondWithJSON(w, http.StatusOK, CapabilityConfig{
+			HarvesterVersion: version,
+			HasAdvancedPower: hasAdvanced,
+		})
+	}
 }
 
 type VCenterCredentials struct {
