@@ -808,7 +808,6 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
                                             <option value="pcnet">pcnet</option>
                                             <option value="rtl8139">rtl8139</option>
                                             <option value="virtio">virtio</option>
-                                            <option value="vmxnet3">vmxnet3</option>
                                         </select>
                                     </div>
 
@@ -878,7 +877,6 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
                                                     <option value="pcnet">pcnet</option>
                                                     <option value="rtl8139">rtl8139</option>
                                                     <option value="virtio">virtio</option>
-                                                    <option value="vmxnet3">vmxnet3</option>
                                                 </select>
                                             </div>
                                         )}
