@@ -338,6 +338,8 @@ const PlanDetails = ({ plan, onClose }) => {
                             {plan.spec?.forcePowerOff && <p><strong>Force Power Off:</strong> Yes</p>}
                             {plan.spec?.gracefulShutdownTimeoutSeconds > 0 && <p><strong>Shutdown Timeout:</strong> {plan.spec.gracefulShutdownTimeoutSeconds}s</p>}
                             {plan.spec?.defaultNetworkInterfaceModel && <p><strong>Default Interface:</strong> {plan.spec.defaultNetworkInterfaceModel}</p>}
+                            {plan.spec?.skipPreflightChecks && <p><strong>Skip Validation:</strong> Yes</p>}
+                            {plan.spec?.defaultDiskBusType && <p><strong>Disk Bus:</strong> {plan.spec.defaultDiskBusType}</p>}
                         </div>
                     </div>
                     <div>
@@ -472,7 +474,7 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
     
     // Updated state for mappings
     const [networkMappings, setNetworkMappings] = useState({});
-    const [networkModels, setNetworkModels] = useState({}); // New state for per-network models
+    const [networkModels, setNetworkModels] = useState({});
     
     const [harvesterNetworks, setHarvesterNetworks] = useState([]);
     const [storageClass, setStorageClass] = useState('');
@@ -482,6 +484,10 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
     const [forcePowerOff, setForcePowerOff] = useState(false);
     const [shutdownTimeout, setShutdownTimeout] = useState('');
     const [defaultModel, setDefaultModel] = useState('');
+    
+    // NEW: States for v1.6 features
+    const [skipPreflight, setSkipPreflight] = useState(false);
+    const [diskBus, setDiskBus] = useState('');
 
     const fetchNamespaces = () => {
         fetch('/api/v1/harvester/namespaces')
@@ -624,7 +630,6 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
                 networkMapping: Object.entries(networkMappings).map(([key, value]) => ({
                     sourceNetwork: key,
                     destinationNetwork: `${value}`,
-                    // Only add networkInterfaceModel if advanced features are enabled
                     networkInterfaceModel: capabilities.hasAdvancedPower ? (networkModels[key] || undefined) : undefined
                 })),
                 folder: selectedVm.folder,
@@ -639,6 +644,12 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
             }
             if (defaultModel) {
                 plan.spec.defaultNetworkInterfaceModel = defaultModel;
+            }
+            
+            // NEW: Attach v1.6 fields
+            plan.spec.skipPreflightChecks = skipPreflight;
+            if (diskBus) {
+                plan.spec.defaultDiskBusType = diskBus;
             }
         }
 
@@ -700,7 +711,7 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
                                     <h4 className="text-sm font-semibold text-yellow-800">Compatibility Mode</h4>
                                     <p className="text-sm text-yellow-700 mt-1">
                                         You are connected to Harvester <strong>{capabilities.harvesterVersion}</strong>. 
-                                        Advanced options (Force Power Off, Interface Models) require Harvester v1.6.0+ and have been hidden.
+                                        Advanced options (Force Power Off, Interface Models, Disk Bus) require Harvester v1.6.0+ and have been hidden.
                                     </p>
                                 </div>
                             </div>
@@ -738,7 +749,7 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
                             </div>
                         </div>
 
-                        {/* New Advanced Options Section - CONDITIONAL RENDERING */}
+                        {/* New Advanced Options Section */}
                         {capabilities.hasAdvancedPower && (
                             <div className="mt-6 border-t pt-4">
                                 <h4 className="text-md font-medium text-gray-900 mb-3">Advanced Options</h4>
@@ -756,6 +767,22 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
                                             <p className="text-xs text-gray-500 mt-0.5">Required if VMware Tools is not installed.</p>
                                         </label>
                                     </div>
+                                    
+                                    {/* NEW: Skip Preflight Checks */}
+                                    <div className="flex items-center">
+                                        <input
+                                            id="skipPreflight"
+                                            type="checkbox"
+                                            checked={skipPreflight}
+                                            onChange={e => setSkipPreflight(e.target.checked)}
+                                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                        />
+                                        <label htmlFor="skipPreflight" className="ml-2 block text-sm text-gray-700">
+                                            Skip Preflight Checks
+                                            <p className="text-xs text-gray-500 mt-0.5">Bypass validation (use with caution).</p>
+                                        </label>
+                                    </div>
+
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700">Graceful Shutdown Timeout (Seconds)</label>
                                         <input
@@ -766,7 +793,8 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
                                             className="mt-1 block w-full form-input text-sm"
                                         />
                                     </div>
-                                    <div className="md:col-span-2">
+                                    
+                                    <div>
                                         <label className="block text-sm font-medium text-gray-700">Default Network Interface Model</label>
                                         <select
                                             value={defaultModel}
@@ -776,10 +804,29 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
                                             <option value="">Auto (Default)</option>
                                             <option value="e1000">e1000</option>
                                             <option value="e1000e">e1000e</option>
+                                            <option value="ne2k_pci">ne2k_pci</option>
+                                            <option value="pcnet">pcnet</option>
+                                            <option value="rtl8139">rtl8139</option>
                                             <option value="virtio">virtio</option>
                                             <option value="vmxnet3">vmxnet3</option>
                                         </select>
-                                        <p className="text-xs text-gray-500 mt-1">Applies to all interfaces unless overridden in the next step.</p>
+                                    </div>
+
+                                    {/* NEW: Default Disk Bus Type */}
+                                    <div className="md:col-span-2">
+                                        <label className="block text-sm font-medium text-gray-700">Default Disk Bus Type</label>
+                                        <select
+                                            value={diskBus}
+                                            onChange={e => setDiskBus(e.target.value)}
+                                            className="mt-1 block w-full form-select text-sm"
+                                        >
+                                            <option value="">Auto (Default)</option>
+                                            <option value="virtio">virtio (High Performance)</option>
+                                            <option value="scsi">scsi</option>
+                                            <option value="sata">sata</option>
+                                            <option value="usb">usb</option>
+                                        </select>
+                                        <p className="text-xs text-gray-500 mt-1">Specify bus type if automatic detection fails.</p>
                                     </div>
                                 </div>
                             </div>
@@ -817,7 +864,6 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
                                             </select>
                                         </div>
                                         
-                                        {/* Conditional Rendering for Per-Interface Model */}
                                         {capabilities.hasAdvancedPower && (
                                             <div className="md:col-span-3">
                                                  <select
@@ -828,6 +874,9 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
                                                     <option value="">Default Model</option>
                                                     <option value="e1000">e1000</option>
                                                     <option value="e1000e">e1000e</option>
+                                                    <option value="ne2k_pci">ne2k_pci</option>
+                                                    <option value="pcnet">pcnet</option>
+                                                    <option value="rtl8139">rtl8139</option>
                                                     <option value="virtio">virtio</option>
                                                     <option value="vmxnet3">vmxnet3</option>
                                                 </select>
@@ -849,14 +898,16 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
                             <div><strong>Target Namespace:</strong> {targetNamespace === 'create_new' ? `${newNamespace} (new)` : targetNamespace}</div>
                             <div><strong>Storage Class:</strong> {storageClass}</div>
                             
-                            {/* Review Advanced Options - Conditional */}
-                            {capabilities.hasAdvancedPower && (forcePowerOff || shutdownTimeout || defaultModel) && (
+                            {/* Review Advanced Options */}
+                            {capabilities.hasAdvancedPower && (forcePowerOff || shutdownTimeout || defaultModel || skipPreflight || diskBus) && (
                                 <div className="mt-2 p-2 bg-yellow-50 rounded border border-yellow-100">
                                     <h4 className="font-medium text-yellow-800">Advanced Settings:</h4>
                                     <ul className="list-disc list-inside pl-2 text-yellow-800">
                                         {forcePowerOff && <li>Force Power Off: Enabled</li>}
                                         {shutdownTimeout && <li>Shutdown Timeout: {shutdownTimeout}s</li>}
                                         {defaultModel && <li>Default Interface: {defaultModel}</li>}
+                                        {skipPreflight && <li>Skip Validation: Yes</li>}
+                                        {diskBus && <li>Disk Bus: {diskBus}</li>}
                                     </ul>
                                 </div>
                             )}
@@ -873,7 +924,6 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
                                     {Object.entries(networkMappings).map(([key, value]) => (
                                         <li key={key}>
                                             {key} &rarr; {value} 
-                                            {/* Show model only if capabilities are enabled */}
                                             {capabilities.hasAdvancedPower && networkModels[key] && <span className="text-xs text-gray-500 ml-2">[{networkModels[key]}]</span>}
                                         </li>
                                     ))}
@@ -1108,7 +1158,6 @@ export default function App() {
     const renderPage = () => {
         switch (page) {
             case 'createPlan':
-                // PASS CAPABILITIES PROP HERE
                 return <CreatePlanWizard onCancel={() => setPage('plans')} onCreatePlan={handleCreatePlan} capabilities={capabilities} />;
             case 'planDetails':
                 return <PlanDetails plan={selectedPlan} onClose={() => setPage('plans')} />;

@@ -18,6 +18,10 @@ type VirtualMachineImportSpec struct {
 	ForcePowerOff                  bool   `json:"forcePowerOff,omitempty"`
 	GracefulShutdownTimeoutSeconds int    `json:"gracefulShutdownTimeoutSeconds,omitempty"`
 	DefaultNetworkInterfaceModel   string `json:"defaultNetworkInterfaceModel,omitempty"`
+
+	// New fields for Harvester v1.6+
+	SkipPreflightChecks bool   `json:"skipPreflightChecks,omitempty"`
+	DefaultDiskBusType  string `json:"defaultDiskBusType,omitempty"`
 }
 
 type SourceCluster struct {
