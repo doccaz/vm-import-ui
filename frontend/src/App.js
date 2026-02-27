@@ -685,7 +685,27 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
     };
 
     const fetchNetworks = () => {
-        fetch('/api/v1/harvester/vlanconfigs').then(res => res.json()).then(data => setHarvesterNetworks(data.map(net => net.metadata.namespace + "/" + net.metadata.name)));
+        fetch('/api/v1/harvester/vlanconfigs')
+            .then(res => res.json())
+            .then(data => {
+                console.log("Raw VLAN data from API:", JSON.stringify(data, null, 2));
+                if (!Array.isArray(data)) {
+                    console.warn("VLAN data is not an array:", data);
+                    setHarvesterNetworks([]);
+                    return;
+                }
+                const networks = data.map(net => {
+                    const ns = net?.metadata?.namespace || 'default';
+                    const name = net?.metadata?.name || 'unknown';
+                    return ns + "/" + name;
+                }).filter(Boolean);
+                console.log("Parsed Harvester networks:", networks);
+                setHarvesterNetworks(networks);
+            })
+            .catch(err => {
+                console.error("Failed to fetch networks:", err);
+                setHarvesterNetworks([]);
+            });
     };
 
     const fetchStorageClasses = () => {
@@ -1061,12 +1081,53 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
                             <h3 className="text-lg font-medium text-gray-900 mb-2 flex-grow">Network Mapping</h3>
                             <button onClick={fetchNetworks} className="ml-2 text-blue-500 hover:text-blue-700"><RefreshCw size={16} /></button>
                         </div>
-                        <p className="text-sm text-gray-600 mb-4">Map source networks to target Harvester networks.</p>
+                        <p className="text-sm text-gray-600 mb-4">
+                            {sourceType === 'ova'
+                                ? 'Select the target Harvester network for the imported VM.'
+                                : 'Map source networks to target Harvester networks.'}
+                        </p>
                         {harvesterNetworks.length === 0 ? (
                             <p className="text-sm text-gray-500">No VLANs defined in Harvester.</p>
+                        ) : sourceType === 'ova' ? (
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center border-b pb-4 mb-2">
+                                    <div className="md:col-span-5">
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Target Harvester Network</label>
+                                        <select
+                                            value={networkMappings['default'] || ''}
+                                            onChange={e => setNetworkMappings(prev => ({ ...prev, 'default': e.target.value }))}
+                                            className="form-select w-full text-sm"
+                                        >
+                                            <option value="">Select Harvester Network</option>
+                                            {harvesterNetworks.map(hnet => <option key={hnet} value={hnet}>{hnet}</option>)}
+                                        </select>
+                                    </div>
+
+                                    {capabilities.hasAdvancedPower && (
+                                        <div className="md:col-span-4">
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Interface Model</label>
+                                            <select
+                                                onChange={e => setNetworkModels(prev => ({ ...prev, 'default': e.target.value }))}
+                                                className="form-select w-full text-sm text-gray-600"
+                                                title="Specific Interface Model"
+                                            >
+                                                <option value="">Default Model</option>
+                                                <option value="e1000">e1000</option>
+                                                <option value="e1000e">e1000e</option>
+                                                <option value="ne2k_pci">ne2k_pci</option>
+                                                <option value="pcnet">pcnet</option>
+                                                <option value="rtl8139">rtl8139</option>
+                                                <option value="virtio">virtio</option>
+                                            </select>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
                         ) : (
                             <div className="space-y-4">
-                                {sourceNetworks.map(net => (
+                                {sourceNetworks.length === 0 ? (
+                                    <p className="text-sm text-gray-500 italic">No source networks found for the selected VM. You can proceed without network mapping.</p>
+                                ) : sourceNetworks.map(net => (
                                     <div key={net} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center border-b pb-4 mb-2 last:border-0 last:pb-0">
                                         <div className="md:col-span-4 font-mono text-sm text-gray-800 break-all flex items-center">
                                             <div className="bg-gray-200 text-gray-600 px-2 py-1 rounded text-xs mr-2">Source</div>
@@ -1114,7 +1175,8 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
                         <h3 className="text-lg font-medium text-gray-900 mb-2">Review Plan</h3>
                         <div className="space-y-4 text-sm">
                             <div><strong>Plan Name:</strong> {planName}</div>
-                            <div><strong>Destination VM Name:</strong> {selectedVm.name}</div>
+                            <div><strong>Destination VM Name:</strong> {sourceType === 'ova' ? ovaVmName : selectedVm?.name}</div>
+                            <div><strong>Source Type:</strong> {sourceType === 'ova' ? 'OVA' : 'VMware vCenter'}</div>
                             <div><strong>Target Namespace:</strong> {targetNamespace === 'create_new' ? `${newNamespace} (new)` : targetNamespace}</div>
                             <div><strong>Storage Class:</strong> {storageClass}</div>
 
@@ -1135,7 +1197,7 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
                             <div>
                                 <h4 className="font-medium mt-2">VM to Migrate:</h4>
                                 <ul className="list-disc list-inside pl-4">
-                                    <li>{selectedVm?.name} <span className="text-gray-500 text-xs">(Folder: {selectedVm?.folder || '/'})</span></li>
+                                    <li>{sourceType === 'ova' ? ovaVmName : selectedVm?.name} {sourceType !== 'ova' && <span className="text-gray-500 text-xs">(Folder: {selectedVm?.folder || '/'})</span>}</li>
                                 </ul>
                             </div>
                             <div>
