@@ -250,6 +250,30 @@ const SourceDetails = ({ source, onClose }) => {
     );
 };
 
+const getOvaSourceStatus = (source) => {
+    const statusText = source.status?.status || 'Pending';
+    const conditions = source.status?.conditions || [];
+    const hasError = conditions.some(c => c.type === 'ClusterError' && c.status === 'True');
+    const isReady = conditions.some(c => c.type === 'ClusterReady' && c.status === 'True');
+
+    let color = 'bg-gray-100 text-gray-700';
+    let label = statusText;
+    if (isReady) {
+        color = 'bg-green-100 text-green-800';
+        label = 'Ready';
+    } else if (hasError) {
+        color = 'bg-red-100 text-red-800';
+        label = statusText === 'clusterNotReady' ? 'Not Ready' : statusText;
+    } else if (statusText === 'clusterReady') {
+        color = 'bg-green-100 text-green-800';
+        label = 'Ready';
+    } else if (statusText === 'clusterNotReady') {
+        color = 'bg-yellow-100 text-yellow-800';
+        label = 'Not Ready';
+    }
+    return { label, color };
+};
+
 const OvaSourcesTable = ({ sources, onEdit, onDelete, onViewDetails }) => (
     <div className="bg-white shadow-md rounded-lg overflow-hidden">
         <table className="min-w-full divide-y divide-gray-200">
@@ -258,20 +282,27 @@ const OvaSourcesTable = ({ sources, onEdit, onDelete, onViewDetails }) => (
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Namespace</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">URL</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
                 </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
                 {sources.length === 0 ? (
                     <tr>
-                        <td colSpan="4" className="px-6 py-4 text-center text-sm text-gray-500">No OVA sources found.</td>
+                        <td colSpan="5" className="px-6 py-4 text-center text-sm text-gray-500">No OVA sources found.</td>
                     </tr>
                 ) : (
                     sources.map(source => (
                         <tr key={source.metadata.uid} className="hover:bg-gray-50">
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{source.metadata.name}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{source.metadata.namespace}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{source.spec.url}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 max-w-xs truncate" title={source.spec.url}>{source.spec.url}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                {(() => {
+                                    const { label, color } = getOvaSourceStatus(source);
+                                    return <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${color}`}>{label}</span>;
+                                })()}
+                            </td>
                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                                 <button onClick={() => onEdit(source)} title="Edit" className="text-blue-600 hover:text-blue-800"><Edit size={18} /></button>
                                 <button onClick={() => onDelete(source)} title="Delete" className="text-red-600 hover:text-red-800"><Trash2 size={18} /></button>
@@ -1582,6 +1613,11 @@ export default function App() {
                     <div>
                         <Header title="OVA Sources" onButtonClick={() => { setOvaSourceToEdit(null); setShowOvaSourceWizard(true); }} />
                         <OvaSourcesTable sources={ovaSources} onEdit={handleEditOvaSource} onDelete={setOvaSourceToDelete} onViewDetails={(source) => { setSelectedOvaSource(source); setPage('ovaSourceDetails'); }} />
+                        <div className="flex justify-end items-center mt-4 space-x-2">
+                            <button onClick={fetchOvaSources} className="text-blue-500 hover:text-blue-700"><RefreshCw size={20} /></button>
+                            <input type="number" value={refreshInterval} onChange={e => setRefreshInterval(e.target.value)} className="w-20 form-input text-sm" />
+                            <span className="text-sm text-gray-600">seconds</span>
+                        </div>
                     </div>
                 );
             case 'about':
