@@ -18,7 +18,7 @@ func main() {
 	}
 	log.SetLevel(logLevel)
 
-	log.Info("Starting VM Import UI Backend v1.0.5")
+	log.Info("Starting VM Import UI Backend v1.1.0")
 
 	k8sClients, err := NewK8sClients()
 	if err != nil && os.Getenv("USE_MOCK_DATA") != "true" {
@@ -44,7 +44,15 @@ func main() {
 	api.HandleFunc("/harvester/vmwaresources/{namespace}/{name}", GetVmwareSourceDetails(k8sClients)).Methods("GET")
 	api.HandleFunc("/harvester/vmwaresources/{namespace}/{name}", UpdateVmwareSourceHandler(k8sClients)).Methods("PUT")
 	api.HandleFunc("/harvester/vmwaresources/{namespace}/{name}", DeleteVmwareSourceHandler(k8sClients)).Methods("DELETE")
-	api.HandleFunc("/harvester/vmwaresources/{namespace}/{name}/yaml", HandleGetSourceYAML(k8sClients)).Methods("GET")
+	api.HandleFunc("/harvester/vmwaresources/{namespace}/{name}/yaml", HandleGetSourceYAML(k8sClients, vmwareSourceGVR)).Methods("GET")
+
+	api.HandleFunc("/harvester/ovasources", ListOvaSourcesHandler(k8sClients)).Methods("GET")
+	api.HandleFunc("/harvester/ovasources", CreateOvaSourceHandler(k8sClients)).Methods("POST")
+	api.HandleFunc("/harvester/ovasources/{namespace}/{name}", GetOvaSourceDetails(k8sClients)).Methods("GET")
+	api.HandleFunc("/harvester/ovasources/{namespace}/{name}", UpdateOvaSourceHandler(k8sClients)).Methods("PUT")
+	api.HandleFunc("/harvester/ovasources/{namespace}/{name}", DeleteOvaSourceHandler(k8sClients)).Methods("DELETE")
+	api.HandleFunc("/harvester/ovasources/{namespace}/{name}/yaml", HandleGetSourceYAML(k8sClients, ovaSourceGVR)).Methods("GET")
+
 	api.HandleFunc("/harvester/namespaces", ListNamespacesHandler(k8sClients)).Methods("GET")
 	api.HandleFunc("/harvester/namespaces", CreateNamespaceHandler(k8sClients)).Methods("POST")
 	api.HandleFunc("/harvester/vlanconfigs", ListVlanConfigsHandler(k8sClients)).Methods("GET")

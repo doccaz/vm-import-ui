@@ -19,7 +19,6 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-
 var (
 	vmiGVR = schema.GroupVersionResource{
 		Group:    "migration.harvesterhci.io",
@@ -30,6 +29,11 @@ var (
 		Group:    "migration.harvesterhci.io",
 		Version:  "v1beta1",
 		Resource: "vmwaresources",
+	}
+	ovaSourceGVR = schema.GroupVersionResource{
+		Group:    "migration.harvesterhci.io",
+		Version:  "v1beta1",
+		Resource: "ovasources",
 	}
 	vmGVR = schema.GroupVersionResource{
 		Group:    "kubevirt.io",
@@ -150,7 +154,7 @@ func CreatePlanHandler(clients *K8sClients) http.HandlerFunc {
 			return
 		}
 
-		log.Infof("Creating VirtualMachineImport CR: %s in namespace %s", plan.Name, plan.Namespace)
+		log.Infof("Creating VirtualMachineImport CR: %s in namespace %s", plan.ObjectMeta.Name, plan.ObjectMeta.Namespace)
 		log.Debugf("Received plan payload: %+v", plan)
 
 		unstructuredObj, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&plan)
@@ -159,7 +163,7 @@ func CreatePlanHandler(clients *K8sClients) http.HandlerFunc {
 			return
 		}
 
-		createdObj, err := clients.Dynamic.Resource(vmiGVR).Namespace(plan.Namespace).Create(context.TODO(), &unstructured.Unstructured{Object: unstructuredObj}, metav1.CreateOptions{})
+		createdObj, err := clients.Dynamic.Resource(vmiGVR).Namespace(plan.ObjectMeta.Namespace).Create(context.TODO(), &unstructured.Unstructured{Object: unstructuredObj}, metav1.CreateOptions{})
 		if err != nil {
 			log.Errorf("Failed to create VirtualMachineImport CR: %v", err)
 			respondWithError(w, http.StatusInternalServerError, "Failed to create VirtualMachineImport CR: "+err.Error())
@@ -569,7 +573,7 @@ func HandleGetPlanYAML(clients *K8sClients) http.HandlerFunc {
 	}
 }
 
-func HandleGetSourceYAML(clients *K8sClients) http.HandlerFunc {
+func HandleGetSourceYAML(clients *K8sClients, gvr schema.GroupVersionResource) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
 		namespace := vars["namespace"]
@@ -577,7 +581,7 @@ func HandleGetSourceYAML(clients *K8sClients) http.HandlerFunc {
 
 		log.Infof("Fetching YAML for source %s/%s", namespace, name)
 
-		item, err := clients.Dynamic.Resource(vmwareSourceGVR).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+		item, err := clients.Dynamic.Resource(gvr).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 		if err != nil {
 			respondWithError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -606,5 +610,201 @@ func ListVMsHandler(clients *K8sClients) http.HandlerFunc {
 			return
 		}
 		respondWithJSON(w, http.StatusOK, list.Items)
+	}
+}
+
+// --- OvaSource Handlers ---
+
+func ListOvaSourcesHandler(clients *K8sClients) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		list, err := clients.Dynamic.Resource(ovaSourceGVR).List(context.TODO(), metav1.ListOptions{})
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Failed to list OvaSource CRs: "+err.Error())
+			return
+		}
+		respondWithJSON(w, http.StatusOK, list.Items)
+	}
+}
+
+type CreateOvaSourcePayload struct {
+	Name               string `json:"name"`
+	Namespace          string `json:"namespace"`
+	URL                string `json:"url"`
+	HttpTimeoutSeconds int    `json:"httpTimeoutSeconds,omitempty"`
+	Username           string `json:"username"`
+	Password           string `json:"password"`
+}
+
+func CreateOvaSourceHandler(clients *K8sClients) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var payload CreateOvaSourcePayload
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			respondWithError(w, http.StatusBadRequest, "Invalid request body")
+			return
+		}
+
+		// 1. Create the Secret
+		secretName := payload.Name + "-ova-credentials"
+		secret := &v1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      secretName,
+				Namespace: payload.Namespace,
+			},
+			StringData: map[string]string{
+				"username": payload.Username,
+				"password": payload.Password,
+			},
+		}
+		_, err := clients.Clientset.CoreV1().Secrets(payload.Namespace).Create(context.TODO(), secret, metav1.CreateOptions{})
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Failed to create credentials secret: "+err.Error())
+			return
+		}
+
+		// 2. Create the OvaSource
+		ovaSource := &unstructured.Unstructured{
+			Object: map[string]interface{}{
+				"apiVersion": "migration.harvesterhci.io/v1beta1",
+				"kind":       "OvaSource",
+				"metadata": map[string]interface{}{
+					"name":      payload.Name,
+					"namespace": payload.Namespace,
+				},
+				"spec": map[string]interface{}{
+					"url": payload.URL,
+					"credentials": map[string]interface{}{
+						"name":      secretName,
+						"namespace": payload.Namespace,
+					},
+				},
+			},
+		}
+		if payload.HttpTimeoutSeconds > 0 {
+			ovaSource.Object["spec"].(map[string]interface{})["httpTimeoutSeconds"] = int64(payload.HttpTimeoutSeconds)
+		}
+
+		createdObj, err := clients.Dynamic.Resource(ovaSourceGVR).Namespace(payload.Namespace).Create(context.TODO(), ovaSource, metav1.CreateOptions{})
+		if err != nil {
+			_ = clients.Clientset.CoreV1().Secrets(payload.Namespace).Delete(context.TODO(), secretName, metav1.DeleteOptions{})
+			respondWithError(w, http.StatusInternalServerError, "Failed to create OvaSource CR: "+err.Error())
+			return
+		}
+
+		respondWithJSON(w, http.StatusCreated, createdObj)
+	}
+}
+
+func GetOvaSourceDetails(clients *K8sClients) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		namespace := vars["namespace"]
+		name := vars["name"]
+
+		sourceObj, err := clients.Dynamic.Resource(ovaSourceGVR).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil {
+			respondWithError(w, http.StatusNotFound, "Failed to get OvaSource: "+err.Error())
+			return
+		}
+
+		secretName, _, _ := unstructured.NestedString(sourceObj.Object, "spec", "credentials", "name")
+		secret, err := clients.Clientset.CoreV1().Secrets(namespace).Get(context.TODO(), secretName, metav1.GetOptions{})
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Failed to get associated secret: "+err.Error())
+			return
+		}
+
+		sourceObj.Object["spec"].(map[string]interface{})["username"] = string(secret.Data["username"])
+
+		respondWithJSON(w, http.StatusOK, sourceObj)
+	}
+}
+
+func UpdateOvaSourceHandler(clients *K8sClients) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		namespace := vars["namespace"]
+		name := vars["name"]
+
+		var payload CreateOvaSourcePayload
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			respondWithError(w, http.StatusBadRequest, "Invalid request body")
+			return
+		}
+
+		sourceObj, err := clients.Dynamic.Resource(ovaSourceGVR).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil {
+			respondWithError(w, http.StatusNotFound, "Failed to get OvaSource: "+err.Error())
+			return
+		}
+		secretName, _, _ := unstructured.NestedString(sourceObj.Object, "spec", "credentials", "name")
+
+		if payload.Username != "" || payload.Password != "" {
+			secret, err := clients.Clientset.CoreV1().Secrets(namespace).Get(context.TODO(), secretName, metav1.GetOptions{})
+			if err != nil {
+				respondWithError(w, http.StatusInternalServerError, "Failed to get associated secret: "+err.Error())
+				return
+			}
+
+			if secret.StringData == nil {
+				secret.StringData = make(map[string]string)
+			}
+
+			if payload.Username != "" {
+				secret.StringData["username"] = payload.Username
+			}
+			if payload.Password != "" {
+				secret.StringData["password"] = payload.Password
+			}
+			_, err = clients.Clientset.CoreV1().Secrets(namespace).Update(context.TODO(), secret, metav1.UpdateOptions{})
+			if err != nil {
+				respondWithError(w, http.StatusInternalServerError, "Failed to update secret: "+err.Error())
+				return
+			}
+		}
+
+		unstructured.SetNestedField(sourceObj.Object, payload.URL, "spec", "url")
+		if payload.HttpTimeoutSeconds > 0 {
+			unstructured.SetNestedField(sourceObj.Object, int64(payload.HttpTimeoutSeconds), "spec", "httpTimeoutSeconds")
+		} else {
+			unstructured.RemoveNestedField(sourceObj.Object, "spec", "httpTimeoutSeconds")
+		}
+
+		updatedObj, err := clients.Dynamic.Resource(ovaSourceGVR).Namespace(namespace).Update(context.TODO(), sourceObj, metav1.UpdateOptions{})
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Failed to update OvaSource: "+err.Error())
+			return
+		}
+
+		respondWithJSON(w, http.StatusOK, updatedObj)
+	}
+}
+
+func DeleteOvaSourceHandler(clients *K8sClients) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		namespace := vars["namespace"]
+		name := vars["name"]
+
+		sourceObj, err := clients.Dynamic.Resource(ovaSourceGVR).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Failed to get OvaSource: "+err.Error())
+			return
+		}
+		secretName, _, _ := unstructured.NestedString(sourceObj.Object, "spec", "credentials", "name")
+
+		err = clients.Dynamic.Resource(ovaSourceGVR).Namespace(namespace).Delete(context.TODO(), name, metav1.DeleteOptions{})
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Failed to delete OvaSource: "+err.Error())
+			return
+		}
+
+		if secretName != "" {
+			err = clients.Clientset.CoreV1().Secrets(namespace).Delete(context.TODO(), secretName, metav1.DeleteOptions{})
+			if err != nil {
+				log.Warnf("Failed to delete associated secret %s/%s: %v", namespace, secretName, err)
+			}
+		}
+
+		w.WriteHeader(http.StatusNoContent)
 	}
 }
