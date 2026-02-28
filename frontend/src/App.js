@@ -848,16 +848,20 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
 
         const [sourceNamespace, sourceName] = selectedSource.split('/');
 
+        const slugify = (text) => text.toString().toLowerCase().trim().replace(/\s+/g, '-').replace(/[^\w-]+/g, '').replace(/--+/g, '-');
+        const originalVmName = sourceType === 'ova' ? ovaVmName : selectedVm?.name;
+        const folder = (sourceType !== 'ova' && selectedVm?.folder && selectedVm.folder !== '/') ? selectedVm.folder : undefined;
+
         // Construct the plan object
         const plan = {
             apiVersion: "migration.harvesterhci.io/v1beta1",
             kind: "VirtualMachineImport",
             metadata: {
-                name: planName.toLowerCase().replace(/\s+/g, '-'),
+                name: slugify(planName),
                 namespace: finalTargetNamespace,
             },
             spec: {
-                virtualMachineName: sourceType === 'ova' ? ovaVmName : selectedVm.name,
+                virtualMachineName: originalVmName,
                 sourceCluster: {
                     name: sourceName,
                     namespace: sourceNamespace,
@@ -870,7 +874,7 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
                     destinationNetwork: `${value}`,
                     networkInterfaceModel: capabilities.hasAdvancedPower ? (networkModels[key] || undefined) : undefined
                 })),
-                folder: sourceType === 'ova' ? undefined : selectedVm?.folder,
+                folder: folder,
             }
         };
 

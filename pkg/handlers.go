@@ -99,9 +99,10 @@ func GetCapabilitiesHandler(clients *K8sClients) http.HandlerFunc {
 }
 
 type VCenterCredentials struct {
-	URL      string
-	Username string
-	Password string
+	URL        string
+	Username   string
+	Password   string
+	Datacenter string
 }
 
 func HandleGetInventory(clients *K8sClients) http.HandlerFunc {
@@ -119,6 +120,7 @@ func HandleGetInventory(clients *K8sClients) http.HandlerFunc {
 		}
 
 		endpoint, _, _ := unstructured.NestedString(sourceObj.Object, "spec", "endpoint")
+		datacenter, _, _ := unstructured.NestedString(sourceObj.Object, "spec", "dc")
 
 		secretName, _, _ := unstructured.NestedString(sourceObj.Object, "spec", "credentials", "name")
 		secretNamespace, _, _ := unstructured.NestedString(sourceObj.Object, "spec", "credentials", "namespace")
@@ -130,9 +132,10 @@ func HandleGetInventory(clients *K8sClients) http.HandlerFunc {
 		}
 
 		creds := VCenterCredentials{
-			URL:      endpoint,
-			Username: string(secret.Data["username"]),
-			Password: string(secret.Data["password"]),
+			URL:        endpoint,
+			Username:   string(secret.Data["username"]),
+			Password:   string(secret.Data["password"]),
+			Datacenter: datacenter,
 		}
 
 		inventory, err := GetVCenterInventory(r.Context(), creds)
