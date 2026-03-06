@@ -20,7 +20,7 @@ type K8sClients struct {
 func NewK8sClients() (*K8sClients, error) {
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		log.Warnf("Could not load in-cluster config: %v. Falling back to kubeconfig.", err)
+		log.Debugf("Could not load in-cluster config: %v. Falling back to kubeconfig.", err)
 
 		var kubeconfig string
 		if kcEnv, ok := os.LookupEnv("KUBECONFIG"); ok {

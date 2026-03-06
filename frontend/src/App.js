@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, ChevronRight, Server, Folder, Cloud, HardDrive, ArrowRight, X, Loader, CheckCircle, Clock, Cpu, MemoryStick, Trash2, Edit, AlertTriangle, RefreshCw, List, Package, Info } from 'lucide-react';
+import { Plus, ChevronRight, Server, Folder, Cloud, HardDrive, ArrowRight, X, Loader, CheckCircle, Clock, Cpu, MemoryStick, Trash2, Edit, AlertTriangle, RefreshCw, List, Package, Info, ChevronUp, ChevronDown } from 'lucide-react';
 
 // --- Helper Functions ---
 const formatBytes = (bytes, decimals = 2) => {
@@ -22,6 +22,46 @@ const formatSeconds = (seconds) => {
     if (h > 0) return `${h}h ${m}m`;
     if (m > 0) return `${m}m ${s}s`;
     return `${s}s`;
+};
+
+const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    try {
+        const date = new Date(dateString);
+        return date.toLocaleString(undefined, {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+        });
+    } catch (e) {
+        return dateString;
+    }
+};
+
+const getNestedValue = (obj, path) => {
+    return path.split('.').reduce((acc, part) => acc && acc[part], obj);
+};
+
+// --- Sortable Header Component ---
+const SortableHeader = ({ label, sortKey, currentSort, onSort }) => {
+    const isActive = currentSort.key === sortKey;
+    return (
+        <th
+            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+            onClick={() => onSort(sortKey)}
+        >
+            <div className="flex items-center space-x-1">
+                <span>{label}</span>
+                <div className="flex flex-col">
+                    <ChevronUp size={12} className={`${isActive && currentSort.direction === 'asc' ? 'text-blue-600' : 'text-gray-300'}`} />
+                    <ChevronDown size={12} className={`${isActive && currentSort.direction === 'desc' ? 'text-blue-600' : 'text-gray-300'}`} />
+                </div>
+            </div>
+        </th>
+    );
 };
 
 // --- Components ---
@@ -47,27 +87,29 @@ const getPlanStatus = (plan) => {
     return 'Pending';
 };
 
-const ResourceTable = ({ plans, onViewDetails, onDelete }) => (
+const ResourceTable = ({ plans, onViewDetails, onDelete, sortConfig, onSort }) => (
     <div className="bg-white shadow-md rounded-lg overflow-hidden">
         <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
                 <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">VM Name</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Target Namespace</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Storage Class</th>
+                    <SortableHeader label="Created" sortKey="metadata.creationTimestamp" currentSort={sortConfig} onSort={onSort} />
+                    <SortableHeader label="Name" sortKey="metadata.name" currentSort={sortConfig} onSort={onSort} />
+                    <SortableHeader label="Status" sortKey="status.importStatus" currentSort={sortConfig} onSort={onSort} />
+                    <SortableHeader label="VM Name" sortKey="spec.virtualMachineName" currentSort={sortConfig} onSort={onSort} />
+                    <SortableHeader label="Target Namespace" sortKey="metadata.namespace" currentSort={sortConfig} onSort={onSort} />
+                    <SortableHeader label="Storage Class" sortKey="spec.storageClass" currentSort={sortConfig} onSort={onSort} />
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
                 </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
                 {plans.length === 0 ? (
                     <tr>
-                        <td colSpan="6" className="px-6 py-4 text-center text-sm text-gray-500">No migration plans found.</td>
+                        <td colSpan="7" className="px-6 py-4 text-center text-sm text-gray-500">No migration plans found.</td>
                     </tr>
                 ) : (
                     plans.map(plan => (
                         <tr key={plan.metadata.uid} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(plan.metadata.creationTimestamp)}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{plan.metadata.name}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{getPlanStatus(plan)}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{plan.spec.virtualMachineName}</td>
@@ -86,25 +128,27 @@ const ResourceTable = ({ plans, onViewDetails, onDelete }) => (
     </div>
 );
 
-const SourcesTable = ({ sources, onEdit, onDelete, onViewDetails }) => (
+const SourcesTable = ({ sources, onEdit, onDelete, onViewDetails, sortConfig, onSort }) => (
     <div className="bg-white shadow-md rounded-lg overflow-hidden">
         <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
                 <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Namespace</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Endpoint</th>
+                    <SortableHeader label="Created" sortKey="metadata.creationTimestamp" currentSort={sortConfig} onSort={onSort} />
+                    <SortableHeader label="Name" sortKey="metadata.name" currentSort={sortConfig} onSort={onSort} />
+                    <SortableHeader label="Namespace" sortKey="metadata.namespace" currentSort={sortConfig} onSort={onSort} />
+                    <SortableHeader label="Endpoint" sortKey="spec.endpoint" currentSort={sortConfig} onSort={onSort} />
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
                 </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
                 {sources.length === 0 ? (
                     <tr>
-                        <td colSpan="4" className="px-6 py-4 text-center text-sm text-gray-500">No vCenter sources found.</td>
+                        <td colSpan="5" className="px-6 py-4 text-center text-sm text-gray-500">No vCenter sources found.</td>
                     </tr>
                 ) : (
                     sources.map(source => (
                         <tr key={source.metadata.uid} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(source.metadata.creationTimestamp)}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{source.metadata.name}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{source.metadata.namespace}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{source.spec.endpoint}</td>
@@ -274,26 +318,28 @@ const getOvaSourceStatus = (source) => {
     return { label, color };
 };
 
-const OvaSourcesTable = ({ sources, onEdit, onDelete, onViewDetails }) => (
+const OvaSourcesTable = ({ sources, onEdit, onDelete, onViewDetails, sortConfig, onSort }) => (
     <div className="bg-white shadow-md rounded-lg overflow-hidden">
         <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
                 <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Namespace</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">URL</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <SortableHeader label="Created" sortKey="metadata.creationTimestamp" currentSort={sortConfig} onSort={onSort} />
+                    <SortableHeader label="Name" sortKey="metadata.name" currentSort={sortConfig} onSort={onSort} />
+                    <SortableHeader label="Namespace" sortKey="metadata.namespace" currentSort={sortConfig} onSort={onSort} />
+                    <SortableHeader label="URL" sortKey="spec.url" currentSort={sortConfig} onSort={onSort} />
+                    <SortableHeader label="Status" sortKey="status.status" currentSort={sortConfig} onSort={onSort} />
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
                 </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
                 {sources.length === 0 ? (
                     <tr>
-                        <td colSpan="5" className="px-6 py-4 text-center text-sm text-gray-500">No OVA sources found.</td>
+                        <td colSpan="6" className="px-6 py-4 text-center text-sm text-gray-500">No OVA sources found.</td>
                     </tr>
                 ) : (
                     sources.map(source => (
                         <tr key={source.metadata.uid} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(source.metadata.creationTimestamp)}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{source.metadata.name}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{source.metadata.namespace}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 max-w-xs truncate" title={source.spec.url}>{source.spec.url}</td>
@@ -1369,6 +1415,33 @@ export default function App() {
     const [ovaSourceToDelete, setOvaSourceToDelete] = useState(null);
     const [selectedOvaSource, setSelectedOvaSource] = useState(null);
 
+    // Sorting State
+    const [plansSort, setPlansSort] = useState({ key: 'metadata.creationTimestamp', direction: 'desc' });
+    const [sourcesSort, setSourcesSort] = useState({ key: 'metadata.creationTimestamp', direction: 'desc' });
+    const [ovaSourcesSort, setOvaSourcesSort] = useState({ key: 'metadata.creationTimestamp', direction: 'desc' });
+
+    const handleSort = (setter) => (key) => {
+        setter(prev => ({
+            key,
+            direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+        }));
+    };
+
+    const sortData = (data, sortConfig) => {
+        if (!sortConfig.key) return data;
+        return [...data].sort((a, b) => {
+            const aVal = getNestedValue(a, sortConfig.key);
+            const bVal = getNestedValue(b, sortConfig.key);
+            if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+            if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+    };
+
+    const sortedPlans = useMemo(() => sortData(plans, plansSort), [plans, plansSort]);
+    const sortedSources = useMemo(() => sortData(sources, sourcesSort), [sources, sourcesSort]);
+    const sortedOvaSources = useMemo(() => sortData(ovaSources, ovaSourcesSort), [ovaSources, ovaSourcesSort]);
+
     // NEW: Capability State
     const [capabilities, setCapabilities] = useState({ harvesterVersion: '', hasAdvancedPower: false });
 
@@ -1607,7 +1680,7 @@ export default function App() {
                 return (
                     <div>
                         <Header title="vCenter Sources" onButtonClick={() => { setSourceToEdit(null); setShowSourceWizard(true); }} />
-                        <SourcesTable sources={sources} onEdit={handleEditSource} onDelete={setSourceToDelete} onViewDetails={(source) => { setSelectedSource(source); setPage('sourceDetails'); }} />
+                        <SourcesTable sources={sortedSources} onEdit={handleEditSource} onDelete={setSourceToDelete} onViewDetails={(source) => { setSelectedSource(source); setPage('sourceDetails'); }} sortConfig={sourcesSort} onSort={handleSort(setSourcesSort)} />
                     </div>
                 );
             case 'ovaSourceDetails':
@@ -1616,7 +1689,7 @@ export default function App() {
                 return (
                     <div>
                         <Header title="OVA Sources" onButtonClick={() => { setOvaSourceToEdit(null); setShowOvaSourceWizard(true); }} />
-                        <OvaSourcesTable sources={ovaSources} onEdit={handleEditOvaSource} onDelete={setOvaSourceToDelete} onViewDetails={(source) => { setSelectedOvaSource(source); setPage('ovaSourceDetails'); }} />
+                        <OvaSourcesTable sources={sortedOvaSources} onEdit={handleEditOvaSource} onDelete={setOvaSourceToDelete} onViewDetails={(source) => { setSelectedOvaSource(source); setPage('ovaSourceDetails'); }} sortConfig={ovaSourcesSort} onSort={handleSort(setOvaSourcesSort)} />
                         <div className="flex justify-end items-center mt-4 space-x-2">
                             <button onClick={fetchOvaSources} className="text-blue-500 hover:text-blue-700"><RefreshCw size={20} /></button>
                             <input type="number" value={refreshInterval} onChange={e => setRefreshInterval(e.target.value)} className="w-20 form-input text-sm" />
@@ -1631,7 +1704,7 @@ export default function App() {
                 return (
                     <div>
                         <Header title="VM Migration Plans" onButtonClick={() => setPage('createPlan')} />
-                        {isLoading ? <p>Loading plans...</p> : <ResourceTable plans={plans} onViewDetails={handleViewDetails} onDelete={setPlanToDelete} />}
+                        {isLoading ? <p>Loading plans...</p> : <ResourceTable plans={sortedPlans} onViewDetails={handleViewDetails} onDelete={setPlanToDelete} sortConfig={plansSort} onSort={handleSort(setPlansSort)} />}
                         <div className="flex justify-end items-center mt-4 space-x-2">
                             <button onClick={fetchPlans} className="text-blue-500 hover:text-blue-700"><RefreshCw size={20} /></button>
                             <input type="number" value={refreshInterval} onChange={e => setRefreshInterval(e.target.value)} className="w-20 form-input text-sm" />
