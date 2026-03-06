@@ -48,7 +48,7 @@ func GetVCenterInventory(ctx context.Context, creds VCenterCredentials) (*Invent
 	defer c.Logout(ctx)
 
 	finder := find.NewFinder(c.Client, true)
-	dc, err := finder.DefaultDatacenter(ctx)
+	dc, err := finder.Datacenter(ctx, creds.Datacenter)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +71,7 @@ func GetVCenterInventory(ctx context.Context, creds VCenterCredentials) (*Invent
 	}
 
 	for _, child := range children {
-		// Initialize recursion with an empty folder path
+		// Initialize recursion with an empty string
 		node, err := processEntity(ctx, c, child, "")
 		if err != nil {
 			log.Warnf("Could not process entity %s: %v", child.Reference().Value, err)
@@ -113,42 +113,49 @@ func processEntity(ctx context.Context, c *govmomi.Client, entity object.Referen
 
 		var networkNames []string
 
-		// Get the list of virtual devices from the managed object
-		deviceList := object.VirtualDeviceList(mvm.Config.Hardware.Device)
+		if mvm.Config != nil {
+			// Get the list of virtual devices from the managed object
+			deviceList := object.VirtualDeviceList(mvm.Config.Hardware.Device)
 
-		// Find all network card devices
-		for _, device := range deviceList {
-			// Use a type assertion to see if the device is a network card
-			if card, ok := device.(types.BaseVirtualEthernetCard); ok {
-				// Get the backing info from the network card
-				backing := card.GetVirtualEthernetCard().Backing
+			// Find all network card devices
+			for _, device := range deviceList {
+				// Use a type assertion to see if the device is a network card
+				if card, ok := device.(types.BaseVirtualEthernetCard); ok {
+					// Get the backing info from the network card
+					backing := card.GetVirtualEthernetCard().Backing
 
-				switch backingInfo := backing.(type) {
-				case *types.VirtualEthernetCardNetworkBackingInfo:
-					// This handles standard vSwitch networks
-					networkNames = append(networkNames, backingInfo.DeviceName)
-				case *types.VirtualEthernetCardDistributedVirtualPortBackingInfo:
-					// This handles distributed vSwitch networks
-					networkNames = append(networkNames, backingInfo.Port.PortgroupKey)
+					switch backingInfo := backing.(type) {
+					case *types.VirtualEthernetCardNetworkBackingInfo:
+						// This handles standard vSwitch networks
+						networkNames = append(networkNames, backingInfo.DeviceName)
+					case *types.VirtualEthernetCardDistributedVirtualPortBackingInfo:
+						// This handles distributed vSwitch networks
+						networkNames = append(networkNames, backingInfo.Port.PortgroupKey)
+					}
 				}
 			}
+		} else {
+			log.Warnf("VM '%s' has nil Config, skipping device processing", me.Name)
 		}
 
 		log.Debugf("Successfully found networks for VM '%s': %v\n", me.Name, networkNames)
 
 		node.Networks = networkNames
 		node.DiskSizeGB = mvm.Summary.Storage.Committed / (1024 * 1024 * 1024)
+
 		node.CPU = mvm.Summary.Config.NumCpu
 		node.MemoryMB = mvm.Summary.Config.MemorySizeMB
+
 		node.Folder = folderPath // Store the accumulated folder path
 		return node, nil
 
 	case *object.Folder:
 		// Build the path: parent/current
-		childPath := me.Name
-		if folderPath != "" {
-			childPath = folderPath + "/" + me.Name
+		childPath := folderPath
+		if childPath != "" {
+			childPath += "/"
 		}
+		childPath += me.Name
 
 		children, err := e.Children(ctx)
 		if err != nil {
@@ -160,7 +167,7 @@ func processEntity(ctx context.Context, c *govmomi.Client, entity object.Referen
 				log.Warnf("Could not process child entity %s: %v", child.Reference().Value, err)
 				continue
 			}
-			if childNode != nil {
+			if childNode != nil && childNode.Type == "Folder" {
 				node.Children = append(node.Children, *childNode)
 			}
 		}
