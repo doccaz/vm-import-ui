@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, ChevronRight, Server, Folder, Cloud, HardDrive, ArrowRight, X, Loader, CheckCircle, Clock, Cpu, MemoryStick, Trash2, Edit, AlertTriangle, RefreshCw, List, Package, Info, ChevronUp, ChevronDown } from 'lucide-react';
+import { Plus, ChevronRight, Server, Folder, Cloud, HardDrive, ArrowRight, X, Loader, CheckCircle, Clock, Cpu, MemoryStick, Trash2, Edit, AlertTriangle, RefreshCw, List, Package, Info, ChevronUp, ChevronDown, Search } from 'lucide-react';
 
 // --- Helper Functions ---
 const formatBytes = (bytes, decimals = 2) => {
@@ -128,7 +128,7 @@ const ResourceTable = ({ plans, onViewDetails, onDelete, sortConfig, onSort }) =
     </div>
 );
 
-const SourcesTable = ({ sources, onEdit, onDelete, onViewDetails, sortConfig, onSort }) => (
+const SourcesTable = ({ sources, onEdit, onDelete, onViewDetails, onExplore, sortConfig, onSort }) => (
     <div className="bg-white shadow-md rounded-lg overflow-hidden">
         <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -153,6 +153,7 @@ const SourcesTable = ({ sources, onEdit, onDelete, onViewDetails, sortConfig, on
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{source.metadata.namespace}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{source.spec.endpoint}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                                <button onClick={() => onExplore(source)} title="Explore Inventory" className="text-indigo-600 hover:text-indigo-800"><Search size={18} /></button>
                                 <button onClick={() => onEdit(source)} title="Edit" className="text-blue-600 hover:text-blue-800"><Edit size={18} /></button>
                                 <button onClick={() => onDelete(source)} title="Delete" className="text-red-600 hover:text-red-800"><Trash2 size={18} /></button>
                                 <button onClick={() => onViewDetails(source)} className="text-blue-600 hover:text-blue-800">Details</button>
@@ -608,6 +609,81 @@ const PlanDetails = ({ plan, onClose }) => {
                 </div>
                 <div className="p-4 border-t bg-gray-50 text-right rounded-b-lg">
                     <button onClick={onClose} className="bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 px-4 rounded-md">Close</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+const SourceExplorer = ({ source, onClose }) => {
+    const [inventory, setInventory] = useState(null);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
+    const [selectedVm, setSelectedVm] = useState(null);
+
+    const fetchInventory = async () => {
+        setIsLoading(true);
+        setError('');
+        try {
+            const response = await fetch(`/api/v1/vcenter/inventory/${source.metadata.namespace}/${source.metadata.name}`);
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error || "Failed to fetch inventory");
+            }
+            const data = await response.json();
+            setInventory(data);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchInventory();
+    }, [source]);
+
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 z-50">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl flex flex-col max-h-[90vh]">
+                <div className="flex justify-between items-center p-4 border-b">
+                    <div className="flex items-center space-x-4">
+                        <h2 className="text-xl font-semibold text-gray-800">Explore: {source.metadata.name}</h2>
+                        <button onClick={fetchInventory} className="text-blue-500 hover:text-blue-700 p-1 rounded-full hover:bg-gray-100 transition-colors" title="Refresh Inventory">
+                            <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
+                        </button>
+                    </div>
+                    <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-200">
+                        <X size={20} />
+                    </button>
+                </div>
+                <div className="p-6 flex-grow overflow-hidden flex flex-col">
+                    {isLoading && !inventory ? (
+                        <div className="flex flex-col items-center justify-center flex-grow">
+                            <Loader className="animate-spin text-blue-500 mb-2" size={32} />
+                            <p className="text-gray-600">Loading vCenter inventory...</p>
+                        </div>
+                    ) : error ? (
+                        <div className="flex flex-col items-center justify-center flex-grow text-center">
+                            <AlertTriangle className="text-red-500 mb-2" size={32} />
+                            <p className="text-red-600 font-medium">Error loading inventory</p>
+                            <p className="text-gray-500 text-sm mt-1">{error}</p>
+                            <button onClick={fetchInventory} className="mt-4 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-md">Retry</button>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full overflow-hidden">
+                            <div className="border border-gray-200 rounded-md p-2 overflow-y-auto bg-white shadow-sm font-sans">
+                                {inventory && <InventoryTree node={inventory} onVmSelect={setSelectedVm} currentlySelectedVm={selectedVm} />}
+                            </div>
+                            <div className="overflow-y-auto">
+                                <VmDetailsPanel vm={selectedVm} />
+                            </div>
+                        </div>
+                    )}
+                </div>
+                <div className="p-4 border-t bg-gray-50 flex justify-between items-center rounded-b-lg">
+                    <p className="text-xs text-gray-500">Browsing data from {source.spec.endpoint}</p>
+                    <button onClick={onClose} className="bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 px-4 rounded-md shadow-sm transition-all active:scale-95">Close Explorer</button>
                 </div>
             </div>
         </div>
@@ -1342,7 +1418,7 @@ const AboutPage = () => (
             <style>{`.github-corner:hover .octo-arm{animation:octocat-wave 560ms ease-in-out}@keyframes octocat-wave{0%,100%{transform:rotate(0)}20%,60%{transform:rotate(-25deg)}40%,80%{transform:rotate(10deg)}}@media (max-width:500px){.github-corner:hover .octo-arm{animation:none}.github-corner .octo-arm{animation:octocat-wave 560ms ease-in-out}}`}</style>
 
             <h2 className="text-xl font-semibold mb-4 z-10 relative">Harvester VM Import UI</h2>
-            <p className="mb-2 z-10 relative"><strong>Version:</strong> 1.1.0</p>
+            <p className="mb-2 z-10 relative"><strong>Version:</strong> 1.2.0</p>
             <p className="mb-2 z-10 relative">This UI provides a user-friendly interface for the Harvester VM Import Controller, allowing users to import virtual machines from a VMware vCenter into a Harvester cluster.</p>
             <p className="mb-6 italic text-sm text-gray-600 z-10 relative mt-2 border-l-4 border-blue-400 pl-3">Based off of an idea by Erico Mendonca (erico.mendonca@suse.com)</p>
 
@@ -1371,7 +1447,7 @@ const AboutPage = () => (
                         <li>The vCenter Endpoint URL and Datacenter Name.</li>
                         <li>Credentials (Username/Password), which are securely stored as Kubernetes Secrets.</li>
                     </ul>
-                    <p className="text-sm mt-1">You can edit these configurations or delete them (which concurrently deletes the stored credential Secret).</p>
+                    <p className="text-sm mt-1">You can edit these configurations, delete them, or use the <strong>Explore</strong> (search icon) function to browse the vCenter inventory and inspect VM specifications directly.</p>
                 </div>
 
                 <div>
@@ -1680,9 +1756,19 @@ export default function App() {
                 return (
                     <div>
                         <Header title="vCenter Sources" onButtonClick={() => { setSourceToEdit(null); setShowSourceWizard(true); }} />
-                        <SourcesTable sources={sortedSources} onEdit={handleEditSource} onDelete={setSourceToDelete} onViewDetails={(source) => { setSelectedSource(source); setPage('sourceDetails'); }} sortConfig={sourcesSort} onSort={handleSort(setSourcesSort)} />
+                        <SourcesTable
+                            sources={sortedSources}
+                            onEdit={handleEditSource}
+                            onDelete={setSourceToDelete}
+                            onViewDetails={(source) => { setSelectedSource(source); setPage('sourceDetails'); }}
+                            onExplore={(source) => { setSelectedSource(source); setPage('exploreSource'); }}
+                            sortConfig={sourcesSort}
+                            onSort={handleSort(setSourcesSort)}
+                        />
                     </div>
                 );
+            case 'exploreSource':
+                return <SourceExplorer source={selectedSource} onClose={() => setPage('sources')} />;
             case 'ovaSourceDetails':
                 return <OvaSourceDetails source={selectedOvaSource} onClose={() => setPage('ovaSources')} />;
             case 'ovaSources':
