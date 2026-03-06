@@ -811,3 +811,109 @@ func DeleteOvaSourceHandler(clients *K8sClients) http.HandlerFunc {
 		w.WriteHeader(http.StatusNoContent)
 	}
 }
+
+type VirtualMachinePowerRequest struct {
+	VMName    string `json:"vmName"`
+	Operation string `json:"operation"` // "on", "off", "reset", "shutdown"
+}
+
+func HandleVMPowerOp(clients *K8sClients) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		namespace := vars["namespace"]
+		name := vars["name"]
+
+		var req VirtualMachinePowerRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			respondWithError(w, http.StatusBadRequest, "Invalid request body")
+			return
+		}
+
+		log.Infof("Power operation '%s' requested for VM %s via VmwareSource %s/%s", req.Operation, req.VMName, namespace, name)
+
+		sourceObj, err := clients.Dynamic.Resource(vmwareSourceGVR).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Failed to get VmwareSource: "+err.Error())
+			return
+		}
+
+		endpoint, _, _ := unstructured.NestedString(sourceObj.Object, "spec", "endpoint")
+		datacenter, _, _ := unstructured.NestedString(sourceObj.Object, "spec", "dc")
+		secretName, _, _ := unstructured.NestedString(sourceObj.Object, "spec", "credentials", "name")
+		secretNamespace, _, _ := unstructured.NestedString(sourceObj.Object, "spec", "credentials", "namespace")
+
+		secret, err := clients.Clientset.CoreV1().Secrets(secretNamespace).Get(context.TODO(), secretName, metav1.GetOptions{})
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Failed to get credentials secret: "+err.Error())
+			return
+		}
+
+		creds := VCenterCredentials{
+			URL:        endpoint,
+			Username:   string(secret.Data["username"]),
+			Password:   string(secret.Data["password"]),
+			Datacenter: datacenter,
+		}
+
+		if err := PowerOpVM(r.Context(), creds, req.VMName, req.Operation); err != nil {
+			log.Errorf("Failed to perform power operation: %v", err)
+			respondWithError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		respondWithJSON(w, http.StatusOK, map[string]string{"message": "Power operation successful"})
+	}
+}
+
+type VirtualMachineRenameRequest struct {
+	OldName string `json:"oldName"`
+	NewName string `json:"newName"`
+}
+
+func HandleVMRename(clients *K8sClients) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		namespace := vars["namespace"]
+		name := vars["name"]
+
+		var req VirtualMachineRenameRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			respondWithError(w, http.StatusBadRequest, "Invalid request body")
+			return
+		}
+
+		log.Infof("Rename operation requested from '%s' to '%s' via VmwareSource %s/%s", req.OldName, req.NewName, namespace, name)
+
+		sourceObj, err := clients.Dynamic.Resource(vmwareSourceGVR).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Failed to get VmwareSource: "+err.Error())
+			return
+		}
+
+		endpoint, _, _ := unstructured.NestedString(sourceObj.Object, "spec", "endpoint")
+		datacenter, _, _ := unstructured.NestedString(sourceObj.Object, "spec", "dc")
+		secretName, _, _ := unstructured.NestedString(sourceObj.Object, "spec", "credentials", "name")
+		secretNamespace, _, _ := unstructured.NestedString(sourceObj.Object, "spec", "credentials", "namespace")
+
+		secret, err := clients.Clientset.CoreV1().Secrets(secretNamespace).Get(context.TODO(), secretName, metav1.GetOptions{})
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Failed to get credentials secret: "+err.Error())
+			return
+		}
+
+		creds := VCenterCredentials{
+			URL:        endpoint,
+			Username:   string(secret.Data["username"]),
+			Password:   string(secret.Data["password"]),
+			Datacenter: datacenter,
+		}
+
+		if err := RenameVM(r.Context(), creds, req.OldName, req.NewName); err != nil {
+			log.Errorf("Failed to rename VM: %v", err)
+			respondWithError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		respondWithJSON(w, http.StatusOK, map[string]string{"message": "Rename successful"})
+	}
+}

@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"strings"
 
@@ -25,6 +26,7 @@ type InventoryNode struct {
 	MemoryMB   int32           `json:"memoryMB,omitempty"`
 	DiskSizeGB int64           `json:"diskSizeGB,omitempty"`
 	Folder     string          `json:"folder,omitempty"`
+	PowerState string          `json:"powerState,omitempty"`
 }
 
 // GetVCenterInventory connects to vCenter and returns the inventory tree.
@@ -104,7 +106,7 @@ func processEntity(ctx context.Context, c *govmomi.Client, entity object.Referen
 	switch e := entity.(type) {
 	case *object.VirtualMachine:
 		var mvm mo.VirtualMachine
-		err := pc.RetrieveOne(ctx, ref, []string{"guest", "summary", "config", "network", "config.hardware.device"}, &mvm)
+		err := pc.RetrieveOne(ctx, ref, []string{"guest", "summary", "config", "network", "config.hardware.device", "runtime"}, &mvm)
 		if err != nil {
 			return nil, err
 		}
@@ -146,6 +148,7 @@ func processEntity(ctx context.Context, c *govmomi.Client, entity object.Referen
 		node.CPU = mvm.Summary.Config.NumCpu
 		node.MemoryMB = mvm.Summary.Config.MemorySizeMB
 
+		node.PowerState = string(mvm.Runtime.PowerState)
 		node.Folder = folderPath // Store the accumulated folder path
 		return node, nil
 
@@ -199,4 +202,103 @@ func processEntity(ctx context.Context, c *govmomi.Client, entity object.Referen
 	default:
 		return nil, nil
 	}
+}
+
+// PowerOpVM performs a power operation on a VM.
+func PowerOpVM(ctx context.Context, creds VCenterCredentials, vmName string, op string) error {
+	fullURL := creds.URL
+	if !strings.HasPrefix(fullURL, "https://") && !strings.HasPrefix(fullURL, "http://") {
+		fullURL = "https://" + fullURL
+	}
+	u, err := url.Parse(fullURL)
+	if err != nil {
+		return err
+	}
+	u.User = url.UserPassword(creds.Username, creds.Password)
+
+	c, err := govmomi.NewClient(ctx, u, true)
+	if err != nil {
+		return err
+	}
+	defer c.Logout(ctx)
+
+	finder := find.NewFinder(c.Client, true)
+	dc, err := finder.Datacenter(ctx, creds.Datacenter)
+	if err != nil {
+		return err
+	}
+	finder.SetDatacenter(dc)
+
+	vm, err := finder.VirtualMachine(ctx, vmName)
+	if err != nil {
+		return err
+	}
+
+	var task *object.Task
+	switch op {
+	case "on":
+		task, err = vm.PowerOn(ctx)
+	case "off":
+		task, err = vm.PowerOff(ctx)
+	case "reset":
+		task, err = vm.Reset(ctx)
+	case "shutdown":
+		err = vm.ShutdownGuest(ctx)
+		if err != nil {
+			// Fallback to power off if shutdown fails (e.g. tools not installed)
+			log.Warnf("Guest shutdown failed for %s, falling back to power off: %v", vmName, err)
+			task, err = vm.PowerOff(ctx)
+		} else {
+			return nil // ShutdownGuest doesn't return a task, it's just an error if it fails to initiate
+		}
+	default:
+		return fmt.Errorf("unsupported power operation: %s", op)
+	}
+
+	if err != nil {
+		return err
+	}
+
+	if task != nil {
+		return task.Wait(ctx)
+	}
+	return nil
+}
+
+// RenameVM renames a VM in vCenter.
+func RenameVM(ctx context.Context, creds VCenterCredentials, oldName string, newName string) error {
+	fullURL := creds.URL
+	if !strings.HasPrefix(fullURL, "https://") && !strings.HasPrefix(fullURL, "http://") {
+		fullURL = "https://" + fullURL
+	}
+	u, err := url.Parse(fullURL)
+	if err != nil {
+		return err
+	}
+	u.User = url.UserPassword(creds.Username, creds.Password)
+
+	c, err := govmomi.NewClient(ctx, u, true)
+	if err != nil {
+		return err
+	}
+	defer c.Logout(ctx)
+
+	finder := find.NewFinder(c.Client, true)
+	dc, err := finder.Datacenter(ctx, creds.Datacenter)
+	if err != nil {
+		return err
+	}
+	finder.SetDatacenter(dc)
+
+	vm, err := finder.VirtualMachine(ctx, oldName)
+	if err != nil {
+		return err
+	}
+
+	task, err := vm.Rename(ctx, newName)
+	if err != nil {
+		return err
+	}
+
+	return task.Wait(ctx)
 }

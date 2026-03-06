@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, ChevronRight, Server, Folder, Cloud, HardDrive, ArrowRight, X, Loader, CheckCircle, Clock, Cpu, MemoryStick, Trash2, Edit, AlertTriangle, RefreshCw, List, Package, Info, ChevronUp, ChevronDown, Search } from 'lucide-react';
+import { Plus, ChevronRight, Server, Folder, Cloud, HardDrive, ArrowRight, X, Loader, CheckCircle, Clock, Cpu, MemoryStick, Trash2, Edit, AlertTriangle, RefreshCw, List, Package, Info, ChevronUp, ChevronDown, Search, Play, Square, RotateCcw, Power } from 'lucide-react';
 
 // --- Helper Functions ---
 const formatBytes = (bytes, decimals = 2) => {
@@ -620,8 +620,9 @@ const SourceExplorer = ({ source, onClose }) => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
     const [selectedVm, setSelectedVm] = useState(null);
+    const [isOperating, setIsOperating] = useState(false);
 
-    const fetchInventory = async () => {
+    const fetchInventory = async (keepSelection = false) => {
         setIsLoading(true);
         setError('');
         try {
@@ -632,10 +633,71 @@ const SourceExplorer = ({ source, onClose }) => {
             }
             const data = await response.json();
             setInventory(data);
+            if (!keepSelection) {
+                setSelectedVm(null);
+            } else if (selectedVm) {
+                // Find and update selected VM in new data
+                const findVm = (node, name) => {
+                    if (node.type === 'VirtualMachine' && node.name === name) return node;
+                    if (node.children) {
+                        for (const child of node.children) {
+                            const found = findVm(child, name);
+                            if (found) return found;
+                        }
+                    }
+                    return null;
+                };
+                const updated = findVm(data, selectedVm.name);
+                if (updated) setSelectedVm(updated);
+            }
         } catch (err) {
             setError(err.message);
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handlePowerOp = async (op) => {
+        if (!selectedVm) return;
+        setIsOperating(true);
+        try {
+            const response = await fetch(`/api/v1/vcenter/vm/${source.metadata.namespace}/${source.metadata.name}/power`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ vmName: selectedVm.name, operation: op })
+            });
+            if (!response.ok) {
+                const data = await response.json();
+                throw new Error(data.error || 'Operation failed');
+            }
+            // Refresh inventory to see state change
+            await fetchInventory(true);
+        } catch (err) {
+            alert(`Error: ${err.message}`);
+        } finally {
+            setIsOperating(false);
+        }
+    };
+
+    const handleRename = async (oldName, newName) => {
+        setIsOperating(true);
+        try {
+            const response = await fetch(`/api/v1/vcenter/vm/${source.metadata.namespace}/${source.metadata.name}/rename`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ oldName, newName })
+            });
+            if (!response.ok) {
+                const data = await response.json();
+                throw new Error(data.error || 'Rename failed');
+            }
+            // Update local selection to new name before refresh
+            setSelectedVm(prev => ({ ...prev, name: newName }));
+            await fetchInventory(true);
+        } catch (err) {
+            alert(`Error: ${err.message}`);
+        } finally {
+            setIsOperating(false);
         }
     };
 
@@ -649,7 +711,7 @@ const SourceExplorer = ({ source, onClose }) => {
                 <div className="flex justify-between items-center p-4 border-b">
                     <div className="flex items-center space-x-4">
                         <h2 className="text-xl font-semibold text-gray-800">Explore: {source.metadata.name}</h2>
-                        <button onClick={fetchInventory} className="text-blue-500 hover:text-blue-700 p-1 rounded-full hover:bg-gray-100 transition-colors" title="Refresh Inventory">
+                        <button onClick={() => fetchInventory(true)} className="text-blue-500 hover:text-blue-700 p-1 rounded-full hover:bg-gray-100 transition-colors" title="Refresh Inventory">
                             <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
                         </button>
                     </div>
@@ -676,7 +738,12 @@ const SourceExplorer = ({ source, onClose }) => {
                                 {inventory && <InventoryTree node={inventory} onVmSelect={setSelectedVm} currentlySelectedVm={selectedVm} />}
                             </div>
                             <div className="overflow-y-auto">
-                                <VmDetailsPanel vm={selectedVm} />
+                                <VmDetailsPanel
+                                    vm={selectedVm}
+                                    onPowerOp={handlePowerOp}
+                                    onRename={handleRename}
+                                    isOperating={isOperating}
+                                />
                             </div>
                         </div>
                     )}
@@ -739,7 +806,17 @@ const InventoryTree = ({ node, onVmSelect, currentlySelectedVm, level = 0 }) => 
     );
 };
 
-const VmDetailsPanel = ({ vm }) => {
+const VmDetailsPanel = ({ vm, onPowerOp, onRename, isOperating }) => {
+    const [isRenaming, setIsRenaming] = useState(false);
+    const [newName, setNewName] = useState('');
+
+    useEffect(() => {
+        if (vm) {
+            setNewName(vm.name);
+            setIsRenaming(false);
+        }
+    }, [vm]);
+
     if (!vm) {
         return (
             <div className="p-4 border rounded-md bg-gray-50 h-full flex items-center justify-center">
@@ -748,10 +825,53 @@ const VmDetailsPanel = ({ vm }) => {
         );
     }
 
+    const handleRenameSubmit = () => {
+        if (newName && newName !== vm.name) {
+            onRename(vm.name, newName);
+        }
+        setIsRenaming(false);
+    };
+
+    const getPowerStateColor = (state) => {
+        switch (state) {
+            case 'poweredOn': return 'text-green-600';
+            case 'poweredOff': return 'text-red-600';
+            case 'suspended': return 'text-yellow-600';
+            default: return 'text-gray-600';
+        }
+    };
+
     return (
-        <div className="p-4 border rounded-md bg-gray-50 h-full">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">{vm.name}</h3>
-            <div className="space-y-3 text-sm">
+        <div className="p-4 border rounded-md bg-gray-50 h-full flex flex-col">
+            <div className="flex justify-between items-center mb-4">
+                {isRenaming ? (
+                    <div className="flex items-center space-x-2 w-full">
+                        <input
+                            type="text"
+                            value={newName}
+                            onChange={(e) => setNewName(e.target.value)}
+                            className="form-input text-lg font-medium flex-grow"
+                            autoFocus
+                        />
+                        <button onClick={handleRenameSubmit} className="text-green-600 hover:text-green-800"><CheckCircle size={20} /></button>
+                        <button onClick={() => setIsRenaming(false)} className="text-red-600 hover:text-red-800"><X size={20} /></button>
+                    </div>
+                ) : (
+                    <div className="flex items-center justify-between w-full">
+                        <h3 className="text-lg font-medium text-gray-900 truncate" title={vm.name}>{vm.name}</h3>
+                        <button onClick={() => setIsRenaming(true)} className="ml-2 text-gray-400 hover:text-blue-600 transition-colors" title="Rename VM">
+                            <Edit size={16} />
+                        </button>
+                    </div>
+                )}
+            </div>
+
+            <div className="space-y-3 text-sm flex-grow">
+                <div className="flex items-center justify-between p-2 bg-white rounded border">
+                    <span className="text-gray-600 font-medium">Power State:</span>
+                    <span className={`font-bold ${getPowerStateColor(vm.powerState)}`}>{vm.powerState}</span>
+                </div>
+
                 <div className="flex items-center">
                     <Cpu size={16} className="mr-2 text-gray-600" />
                     <span>{vm.cpu || 'N/A'} vCPU(s)</span>
@@ -764,10 +884,9 @@ const VmDetailsPanel = ({ vm }) => {
                     <HardDrive size={16} className="mr-2 text-gray-600" />
                     <span>{vm.diskSizeGB || 'N/A'} GB Storage</span>
                 </div>
-                {/* Added Folder Display */}
                 <div className="flex items-center">
                     <Folder size={16} className="mr-2 text-gray-600" />
-                    <span>{vm.folder || '/'}</span>
+                    <span className="truncate" title={vm.folder || '/'}>{vm.folder || '/'}</span>
                 </div>
                 <div>
                     <h4 className="font-medium text-gray-800 mt-4 mb-1">Networks</h4>
@@ -775,6 +894,49 @@ const VmDetailsPanel = ({ vm }) => {
                         {(vm.networks || []).map((net, i) => <li key={i}>{net}</li>)}
                     </ul>
                 </div>
+            </div>
+
+            <div className="mt-6 pt-4 border-t">
+                <h4 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wider">VM Operations</h4>
+                <div className="grid grid-cols-2 gap-2">
+                    <button
+                        onClick={() => onPowerOp('on')}
+                        disabled={isOperating || vm.powerState === 'poweredOn'}
+                        className="flex items-center justify-center px-3 py-2 bg-white border border-green-200 text-green-700 rounded-md hover:bg-green-50 disabled:opacity-50 disabled:bg-gray-50 transition-colors"
+                        title="Power On"
+                    >
+                        <Play size={16} className="mr-2" /> Power On
+                    </button>
+                    <button
+                        onClick={() => onPowerOp('shutdown')}
+                        disabled={isOperating || vm.powerState === 'poweredOff'}
+                        className="flex items-center justify-center px-3 py-2 bg-white border border-red-200 text-red-700 rounded-md hover:bg-red-50 disabled:opacity-50 disabled:bg-gray-50 transition-colors"
+                        title="Guest Shutdown"
+                    >
+                        <Power size={16} className="mr-2" /> Shutdown
+                    </button>
+                    <button
+                        onClick={() => onPowerOp('off')}
+                        disabled={isOperating || vm.powerState === 'poweredOff'}
+                        className="flex items-center justify-center px-3 py-2 bg-white border border-red-200 text-red-700 rounded-md hover:bg-red-50 disabled:opacity-50 disabled:bg-gray-50 transition-colors"
+                        title="Power Off (Immediate)"
+                    >
+                        <Square size={16} className="mr-2 text-red-600" /> Power Off
+                    </button>
+                    <button
+                        onClick={() => onPowerOp('reset')}
+                        disabled={isOperating || vm.powerState === 'poweredOff'}
+                        className="flex items-center justify-center px-3 py-2 bg-white border border-yellow-200 text-yellow-700 rounded-md hover:bg-yellow-50 disabled:opacity-50 disabled:bg-gray-50 transition-colors"
+                        title="Reset"
+                    >
+                        <RotateCcw size={16} className="mr-2" /> Reset
+                    </button>
+                </div>
+                {isOperating && (
+                    <div className="mt-3 flex items-center justify-center text-xs text-blue-600 animate-pulse">
+                        <Loader size={12} className="animate-spin mr-1" /> Executing operation...
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -1418,7 +1580,7 @@ const AboutPage = () => (
             <style>{`.github-corner:hover .octo-arm{animation:octocat-wave 560ms ease-in-out}@keyframes octocat-wave{0%,100%{transform:rotate(0)}20%,60%{transform:rotate(-25deg)}40%,80%{transform:rotate(10deg)}}@media (max-width:500px){.github-corner:hover .octo-arm{animation:none}.github-corner .octo-arm{animation:octocat-wave 560ms ease-in-out}}`}</style>
 
             <h2 className="text-xl font-semibold mb-4 z-10 relative">Harvester VM Import UI</h2>
-            <p className="mb-2 z-10 relative"><strong>Version:</strong> 1.2.0</p>
+            <p className="mb-2 z-10 relative"><strong>Version:</strong> 1.3.0</p>
             <p className="mb-2 z-10 relative">This UI provides a user-friendly interface for the Harvester VM Import Controller, allowing users to import virtual machines from a VMware vCenter into a Harvester cluster.</p>
             <p className="mb-6 italic text-sm text-gray-600 z-10 relative mt-2 border-l-4 border-blue-400 pl-3">Based off of an idea by Erico Mendonca (erico.mendonca@suse.com)</p>
 
@@ -1447,7 +1609,7 @@ const AboutPage = () => (
                         <li>The vCenter Endpoint URL and Datacenter Name.</li>
                         <li>Credentials (Username/Password), which are securely stored as Kubernetes Secrets.</li>
                     </ul>
-                    <p className="text-sm mt-1">You can edit these configurations, delete them, or use the <strong>Explore</strong> (search icon) function to browse the vCenter inventory and inspect VM specifications directly.</p>
+                    <p className="text-sm mt-1">You can edit these configurations, delete them, or use the <strong>Explore</strong> (search icon) function to browse the vCenter inventory, inspect VM specifications, <strong>manage power states</strong> (On/Off/Reset/Shutdown), and <strong>rename VMs</strong> directly in vCenter.</p>
                 </div>
 
                 <div>
