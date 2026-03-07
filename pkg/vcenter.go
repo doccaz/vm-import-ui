@@ -46,6 +46,7 @@ type VMNetwork struct {
 
 // InventoryNode represents a generic node in the vCenter inventory tree.
 type InventoryNode struct {
+	ID         string          `json:"id"`
 	Name       string          `json:"name"`
 	Type       string          `json:"type"`
 	Children   []InventoryNode `json:"children,omitempty"`
@@ -128,6 +129,7 @@ func processEntity(ctx context.Context, c *govmomi.Client, entity object.Referen
 	}
 
 	node := &InventoryNode{
+		ID:   ref.Value,
 		Name: me.Name,
 		Type: ref.Type,
 	}
