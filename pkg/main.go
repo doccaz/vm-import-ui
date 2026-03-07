@@ -18,7 +18,7 @@ func main() {
 	}
 	log.SetLevel(logLevel)
 
-	log.Info("Starting VM Import UI Backend v1.3.0")
+	log.Info("Starting VM Import UI Backend v1.5.0")
 
 	k8sClients, err := NewK8sClients()
 	if err != nil && os.Getenv("USE_MOCK_DATA") != "true" {
@@ -33,6 +33,7 @@ func main() {
 	api.HandleFunc("/vcenter/inventory/{namespace}/{name}", HandleGetInventory(k8sClients)).Methods("GET")
 	api.HandleFunc("/vcenter/vm/{namespace}/{name}/power", HandleVMPowerOp(k8sClients)).Methods("POST")
 	api.HandleFunc("/vcenter/vm/{namespace}/{name}/rename", HandleVMRename(k8sClients)).Methods("POST")
+	api.HandleFunc("/vcenter/vm/{namespace}/{name}/mac", HandleUpdateVMMAC(k8sClients)).Methods("POST")
 	api.HandleFunc("/plans", CreatePlanHandler(k8sClients)).Methods("POST")
 	api.HandleFunc("/plans", ListPlansHandler(k8sClients)).Methods("GET")
 	api.HandleFunc("/plans/{namespace}/{name}", DeletePlanHandler(k8sClients)).Methods("DELETE")

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, ChevronRight, Server, Folder, Cloud, HardDrive, ArrowRight, X, Loader, CheckCircle, Clock, Cpu, MemoryStick, Trash2, Edit, AlertTriangle, RefreshCw, List, Package, Info, ChevronUp, ChevronDown, Search, Play, Square, RotateCcw, Power } from 'lucide-react';
+import { Plus, ChevronRight, Server, Folder, Cloud, HardDrive, ArrowRight, X, Loader, CheckCircle, Clock, Cpu, MemoryStick, Trash2, Edit, AlertTriangle, RefreshCw, List, Package, Info, ChevronUp, ChevronDown, Search, Play, Square, RotateCcw, Power, CheckCircle2, AlertCircle, HelpCircle, XCircle, Network, Check } from 'lucide-react';
 
 // --- Helper Functions ---
 const formatBytes = (bytes, decimals = 2) => {
@@ -87,46 +87,111 @@ const getPlanStatus = (plan) => {
     return 'Pending';
 };
 
-const ResourceTable = ({ plans, onViewDetails, onDelete, sortConfig, onSort }) => (
-    <div className="bg-white shadow-md rounded-lg overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-                <tr>
-                    <SortableHeader label="Created" sortKey="metadata.creationTimestamp" currentSort={sortConfig} onSort={onSort} />
-                    <SortableHeader label="Name" sortKey="metadata.name" currentSort={sortConfig} onSort={onSort} />
-                    <SortableHeader label="Status" sortKey="status.importStatus" currentSort={sortConfig} onSort={onSort} />
-                    <SortableHeader label="VM Name" sortKey="spec.virtualMachineName" currentSort={sortConfig} onSort={onSort} />
-                    <SortableHeader label="Target Namespace" sortKey="metadata.namespace" currentSort={sortConfig} onSort={onSort} />
-                    <SortableHeader label="Storage Class" sortKey="spec.storageClass" currentSort={sortConfig} onSort={onSort} />
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
-                </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-                {plans.length === 0 ? (
+const ResourceTable = ({ plans, onViewDetails, onDelete, sortConfig, onSort, expandedPlans, toggleExpand }) => {
+    const renderStatusIcon = (status) => {
+        if (status === 'True') return <CheckCircle2 size={14} className="text-green-500 mr-1" />;
+        if (status === 'False') return <XCircle size={14} className="text-red-500 mr-1" />;
+        return <HelpCircle size={14} className="text-gray-400 mr-1" />;
+    };
+
+    return (
+        <div className="bg-white shadow-md rounded-lg overflow-hidden">
+            <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
                     <tr>
-                        <td colSpan="7" className="px-6 py-4 text-center text-sm text-gray-500">No migration plans found.</td>
+                        <th className="px-4 py-3"></th>
+                        <SortableHeader label="Created" sortKey="metadata.creationTimestamp" currentSort={sortConfig} onSort={onSort} />
+                        <SortableHeader label="Name" sortKey="metadata.name" currentSort={sortConfig} onSort={onSort} />
+                        <SortableHeader label="Status" sortKey="status.importStatus" currentSort={sortConfig} onSort={onSort} />
+                        <SortableHeader label="VM Name" sortKey="spec.virtualMachineName" currentSort={sortConfig} onSort={onSort} />
+                        <SortableHeader label="Target Namespace" sortKey="metadata.namespace" currentSort={sortConfig} onSort={onSort} />
+                        <SortableHeader label="Storage Class" sortKey="spec.storageClass" currentSort={sortConfig} onSort={onSort} />
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
                     </tr>
-                ) : (
-                    plans.map(plan => (
-                        <tr key={plan.metadata.uid} className="hover:bg-gray-50">
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(plan.metadata.creationTimestamp)}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{plan.metadata.name}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{getPlanStatus(plan)}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{plan.spec.virtualMachineName}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{plan.metadata.namespace}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{plan.spec.storageClass}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
-                                <button onClick={() => { }} title="Edit" className="text-gray-600 hover:text-gray-800 cursor-not-allowed"><Edit size={18} /></button>
-                                <button onClick={() => onDelete(plan)} title="Delete" className="text-red-600 hover:text-red-800"><Trash2 size={18} /></button>
-                                <button onClick={() => onViewDetails(plan)} className="text-blue-600 hover:text-blue-800">Details</button>
-                            </td>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                    {plans.length === 0 ? (
+                        <tr>
+                            <td colSpan="8" className="px-6 py-4 text-center text-sm text-gray-500">No migration plans found.</td>
                         </tr>
-                    ))
-                )}
-            </tbody>
-        </table>
-    </div>
-);
+                    ) : (
+                        plans.map(plan => (
+                            <React.Fragment key={plan.metadata.uid}>
+                                <tr className="hover:bg-gray-50 transition-colors">
+                                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        <button onClick={() => toggleExpand(plan.metadata.uid)} className="p-1 hover:bg-gray-100 rounded-full transition-colors">
+                                            {expandedPlans.has(plan.metadata.uid) ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                                        </button>
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(plan.metadata.creationTimestamp)}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{plan.metadata.name}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{getPlanStatus(plan)}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{plan.spec?.virtualMachineName || 'N/A'}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{plan.metadata.namespace}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{plan.spec.storageClass}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2 pr-4">
+                                        <button onClick={() => { }} title="Edit" className="text-gray-600 hover:text-gray-800 cursor-not-allowed"><Edit size={18} /></button>
+                                        <button onClick={() => onDelete(plan)} title="Delete" className="text-red-600 hover:text-red-800"><Trash2 size={18} /></button>
+                                        <button onClick={() => onViewDetails(plan)} className="text-blue-600 hover:text-blue-800">Details</button>
+                                    </td>
+                                </tr>
+                                {expandedPlans.has(plan.metadata.uid) && (
+                                    <tr className="bg-gray-50">
+                                        <td colSpan="8" className="px-6 py-4">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                <div>
+                                                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Import Conditions</h4>
+                                                    <div className="space-y-1 max-h-48 overflow-y-auto pr-2">
+                                                        {(plan.status?.importConditions || plan.status?.conditions || []).map((c, i) => (
+                                                            <div key={i} className="flex items-start text-sm border-b border-gray-50 last:border-0 pb-1">
+                                                                <span className="mt-0.5">{renderStatusIcon(c.status || c.Status)}</span>
+                                                                <div className="flex-grow">
+                                                                    <div className="flex justify-between items-center">
+                                                                        <span className="font-medium text-gray-700">{c.type || c.Type}</span>
+                                                                        <span className="text-[10px] text-gray-400 font-mono">{formatDate(c.lastTransitionTime || c.lastUpdateTime || c.LastUpdateTime)}</span>
+                                                                    </div>
+                                                                    <div className="text-gray-500 text-xs italic">{c.message || c.Message || (c.status === 'True' ? 'Step completed successfully' : '')}</div>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                        {(!plan.status?.importConditions && (!plan.status?.conditions || plan.status.conditions.length === 0)) && <p className="text-xs text-gray-500 italic">No conditions reported yet.</p>}
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Disk Import Status</h4>
+                                                    <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
+                                                        {(plan.status?.diskImportStatus || plan.status?.diskStatus || plan.status?.planStatus?.disks || []).map((d, i) => (
+                                                            <div key={i} className="text-sm bg-white p-2 rounded border shadow-sm">
+                                                                <div className="flex justify-between items-start mb-1">
+                                                                    <div className="flex flex-col truncate mr-2">
+                                                                        <span className="font-medium text-gray-700 truncate" title={d.diskName || d.name || d.Name}>{d.diskName || d.name || d.Name || `Disk ${i}`}</span>
+                                                                        <span className="text-[10px] text-gray-400 font-mono">Size: {formatBytes(d.diskSize || d.size || 0)}</span>
+                                                                    </div>
+                                                                    <span className="text-xs font-bold text-blue-600">{d.progress ?? 0}%</span>
+                                                                </div>
+                                                                <div className="w-full bg-gray-200 rounded-full h-1.5 mb-1">
+                                                                    <div className="bg-blue-600 h-1.5 rounded-full" style={{ width: `${d.progress ?? 0}%` }}></div>
+                                                                </div>
+                                                                <p className="text-[10px] text-gray-500 truncate" title={d.status || d.Status || (d.diskConditions?.[d.diskConditions.length - 1]?.type)}>
+                                                                    {d.status || d.Status || (d.diskConditions?.[d.diskConditions.length - 1]?.type) || 'Initialising...'}
+                                                                </p>
+                                                            </div>
+                                                        ))}
+                                                        {(!plan.status?.diskImportStatus && !plan.status?.diskStatus && !plan.status?.planStatus?.disks) && <p className="text-xs text-gray-500 italic">No disk progress reported yet.</p>}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )}
+                            </React.Fragment>
+                        ))
+                    )}
+                </tbody>
+            </table>
+        </div>
+    );
+};
 
 const SourcesTable = ({ sources, onEdit, onDelete, onViewDetails, onExplore, sortConfig, onSort }) => (
     <div className="bg-white shadow-md rounded-lg overflow-hidden">
@@ -554,55 +619,173 @@ const PlanDetails = ({ plan, onClose }) => {
                     </button>
                 </div>
                 <div className="p-6 space-y-6 overflow-y-auto">
-                    <div>
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">VM Characteristics</h3>
-                        <div className="p-3 bg-gray-50 rounded-md border text-sm space-y-2">
-                            <div className="flex items-center">
-                                <Cpu size={16} className="mr-2 text-gray-600" />
-                                <span>{plan.vms?.[0]?.cpu || 'N/A'} vCPU(s)</span>
-                            </div>
-                            <div className="flex items-center">
-                                <MemoryStick size={16} className="mr-2 text-gray-600" />
-                                <span>{formatBytes((plan.vms?.[0]?.memoryMB || 0) * 1024 * 1024, 0)} Memory</span>
-                            </div>
-                            <div className="flex items-center">
-                                <HardDrive size={16} className="mr-2 text-gray-600" />
-                                <span>{plan.vms?.[0]?.diskSizeGB || 'N/A'} GB Storage</span>
-                            </div>
-                            {/* Added Folder Display */}
-                            <div className="flex items-center">
-                                <Folder size={16} className="mr-2 text-gray-600" />
-                                <span>{plan.spec?.folder || '/'}</span>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <h3 className="text-lg font-medium text-gray-900 mb-2">VM Characteristics</h3>
+                            <div className="p-3 bg-gray-50 rounded-md border text-sm space-y-2">
+                                <div className="flex items-center">
+                                    <Cpu size={16} className="mr-2 text-gray-600" />
+                                    <span>{plan.status?.cpu || plan.vms?.[0]?.cpu || 'N/A'} vCPU(s)</span>
+                                </div>
+                                <div className="flex items-center">
+                                    <MemoryStick size={16} className="mr-2 text-gray-600" />
+                                    <span>{plan.status?.memoryMB ? formatBytes(plan.status.memoryMB * 1024 * 1024, 0) :
+                                        (plan.vms?.[0]?.memoryMB ? formatBytes(plan.vms[0].memoryMB * 1024 * 1024, 0) : 'N/A')} Memory</span>
+                                </div>
+                                <div className="flex items-center">
+                                    <HardDrive size={16} className="mr-2 text-gray-600" />
+                                    <span>{plan.status?.diskImportStatus ? (plan.status.diskImportStatus.reduce((acc, d) => acc + (d.diskSize || 0), 0) / (1024 * 1024 * 1024)).toFixed(0) : (plan.vms?.[0]?.diskSizeGB || 'N/A')} GB Storage</span>
+                                </div>
+                                <div className="flex items-center">
+                                    <Folder size={16} className="mr-2 text-gray-600" />
+                                    <span>{plan.spec?.folder || '/'}</span>
+                                </div>
+                                {plan.vms?.[0]?.networks?.[0]?.mac && (
+                                    <div className="flex items-center text-xs text-gray-500 pt-1 border-t">
+                                        <Network size={14} className="mr-2" />
+                                        <span className="font-mono">Source MAC: {plan.vms[0].networks[0].mac}</span>
+                                    </div>
+                                )}
                             </div>
                         </div>
-                    </div>
-                    <div>
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">Plan Summary</h3>
-                        <div className="p-3 bg-gray-50 rounded-md border text-sm space-y-1">
-                            <p><strong>VM Name:</strong> {plan.spec?.virtualMachineName || 'N/A'}</p>
-                            <p><strong>Source:</strong> {plan.spec?.sourceCluster?.namespace}/{plan.spec?.sourceCluster?.name || 'N/A'}</p>
-                            <p><strong>Storage Class:</strong> {plan.spec?.storageClass || 'N/A'}</p>
+                        <div>
+                            <h3 className="text-lg font-medium text-gray-900 mb-2 font-sans border-b pb-1">Configuration Parameters</h3>
+                            <div className="p-3 bg-white rounded-md border shadow-sm text-xs space-y-2">
+                                <div className="grid grid-cols-2 gap-x-2 gap-y-1">
+                                    <span className="text-gray-500 font-medium">VM Name:</span>
+                                    <span className="text-gray-800 break-all font-semibold">{plan.spec?.virtualMachineName || 'N/A'}</span>
 
-                            {/* Added Advanced Options Display */}
-                            {plan.spec?.forcePowerOff && <p><strong>Force Power Off:</strong> Yes</p>}
-                            {plan.spec?.gracefulShutdownTimeoutSeconds > 0 && <p><strong>Shutdown Timeout:</strong> {plan.spec.gracefulShutdownTimeoutSeconds}s</p>}
-                            {plan.spec?.defaultNetworkInterfaceModel && <p><strong>Default Interface:</strong> {plan.spec.defaultNetworkInterfaceModel}</p>}
-                            {plan.spec?.skipPreflightChecks && <p><strong>Skip Validation:</strong> Yes</p>}
-                            {plan.spec?.defaultDiskBusType && <p><strong>Disk Bus:</strong> {plan.spec.defaultDiskBusType}</p>}
+                                    <span className="text-gray-500 font-medium">Source:</span>
+                                    <span className="text-gray-800 break-all">{plan.spec?.sourceCluster?.namespace}/{plan.spec?.sourceCluster?.name || 'N/A'}</span>
+
+                                    <span className="text-gray-500 font-medium">Storage Class:</span>
+                                    <span className="text-gray-800">{plan.spec?.storageClass || 'N/A'}</span>
+
+                                    <span className="text-gray-500 font-medium">Force Power Off:</span>
+                                    <span className={plan.spec?.forcePowerOff ? "text-orange-600 font-bold" : "text-gray-400"}>{plan.spec?.forcePowerOff ? "Yes" : "No"}</span>
+
+                                    <span className="text-gray-500 font-medium">Shutdown Timeout:</span>
+                                    <span className="text-gray-800">{plan.spec?.gracefulShutdownTimeoutSeconds || '0'}s</span>
+
+                                    <span className="text-gray-500 font-medium">Skip Validation:</span>
+                                    <span className={plan.spec?.skipPreflightChecks ? "text-blue-600 font-bold" : "text-gray-400"}>{plan.spec?.skipPreflightChecks ? "Yes" : "No"}</span>
+
+                                    <span className="text-gray-500 font-medium">Default Disk Bus:</span>
+                                    <span className="text-gray-800">{plan.spec?.defaultDiskBusType || 'virtio'}</span>
+
+                                    <span className="text-gray-500 font-medium">Default Net Model:</span>
+                                    <span className="text-gray-800">{plan.spec?.defaultNetworkInterfaceModel || 'virtio'}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <h3 className="text-lg font-medium text-gray-900 mb-2 font-sans border-b pb-1">Network Mappings</h3>
+                            <div className="bg-white border rounded-lg shadow-sm overflow-hidden text-[10px]">
+                                <table className="min-w-full divide-y divide-gray-200">
+                                    <thead className="bg-gray-50">
+                                        <tr>
+                                            <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-tight">Source Net</th>
+                                            <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-tight">Target VLAN</th>
+                                            <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-tight">Model</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-200">
+                                        {(plan.spec?.networkMapping || []).map((net, i) => (
+                                            <tr key={i} className="hover:bg-gray-50 transition-colors">
+                                                <td className="px-3 py-2 text-gray-700">{net.sourceNetwork}</td>
+                                                <td className="px-3 py-2 text-blue-600 font-medium">{net.destinationNetwork}</td>
+                                                <td className="px-3 py-2 text-gray-500 font-mono italic">{net.networkInterfaceModel || plan.spec?.defaultNetworkInterfaceModel || 'virtio'}</td>
+                                            </tr>
+                                        ))}
+                                        {(!plan.spec?.networkMapping || plan.spec.networkMapping.length === 0) && (
+                                            <tr><td colSpan="3" className="px-3 py-4 text-center text-xs text-gray-500 italic">No network mappings defined.</td></tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div>
+                            <h3 className="text-lg font-medium text-gray-900 mb-2 font-sans border-b pb-1">Disks</h3>
+                            <div className="bg-white border rounded-lg shadow-sm overflow-hidden text-[10px]">
+                                <table className="min-w-full divide-y divide-gray-200">
+                                    <thead className="bg-gray-50">
+                                        <tr>
+                                            <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-tight">Source Disk</th>
+                                            <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-tight">Size</th>
+                                            <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-tight">Storage Class</th>
+                                            <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-tight">Bus</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-200">
+                                        {(plan.status?.diskImportStatus || plan.spec?.disks || []).length > 0 ? (
+                                            (plan.status?.diskImportStatus || plan.spec?.disks || []).map((disk, i) => {
+                                                const name = disk.diskName || disk.sourceDisk || (i === 0 ? "Root Disk" : `Disk ${i}`);
+                                                const size = disk.diskSize ? formatBytes(disk.diskSize) :
+                                                    (disk.sizeGB || disk.size ? (disk.sizeGB || disk.size) + ' GB' : 'N/A');
+                                                const sc = disk.storageClass || plan.spec?.storageClass || 'default';
+                                                const bus = disk.busType || disk.bus || plan.spec?.defaultDiskBusType || 'virtio';
+
+                                                return (
+                                                    <tr key={i} className="hover:bg-gray-50 transition-colors">
+                                                        <td className="px-3 py-2 text-gray-700 truncate max-w-[120px]" title={name}>{name}</td>
+                                                        <td className="px-3 py-2 text-gray-700 font-medium">{size}</td>
+                                                        <td className="px-3 py-2 text-xs text-gray-700">{sc}</td>
+                                                        <td className="px-3 py-2 text-gray-500 font-mono italic uppercase">{bus}</td>
+                                                    </tr>
+                                                );
+                                            })
+                                        ) : (
+                                            <tr className="hover:bg-gray-50 transition-colors">
+                                                <td className="px-3 py-2 text-gray-700 font-medium">Root Disk</td>
+                                                <td className="px-3 py-2 text-gray-700 font-medium">{plan.vms?.[0]?.diskSizeGB || 'N/A'} GB</td>
+                                                <td className="px-3 py-2 text-xs text-gray-700">{plan.spec?.storageClass || 'default'}</td>
+                                                <td className="px-3 py-2 text-gray-500 font-mono italic">{plan.spec?.defaultDiskBusType || 'virtio'}</td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                     <div>
-                        <div className="flex space-x-2">
-                            <button onClick={() => handleShowDebug('logs')} className="text-sm text-blue-600 hover:underline">
-                                {showDebug === 'logs' ? 'Hide' : 'Show'} Debug Logs
+                        <div className="flex space-x-4 border-b">
+                            <button
+                                onClick={() => handleShowDebug('logs')}
+                                className={`pb-2 text-sm font-medium transition-colors ${showDebug === 'logs' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+                            >
+                                Debug Logs
                             </button>
-                            <button onClick={() => handleShowDebug('yaml')} className="text-sm text-blue-600 hover:underline">
-                                {showDebug === 'yaml' ? 'Hide' : 'View'} YAML
+                            <button
+                                onClick={() => handleShowDebug('yaml')}
+                                className={`pb-2 text-sm font-medium transition-colors ${showDebug === 'yaml' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+                            >
+                                View YAML
                             </button>
                         </div>
                         {showDebug && (
-                            <div className="mt-2 p-2 border rounded-md bg-gray-900 text-white font-mono text-xs max-h-48 overflow-y-auto">
-                                <pre>{isLoadingDebug ? 'Loading...' : (showDebug === 'logs' ? logs : yamlContent)}</pre>
+                            <div className="mt-4 p-4 border rounded-md bg-gray-900 text-white font-mono text-[10px] max-h-96 overflow-y-auto shadow-inner group relative">
+                                <button
+                                    onClick={() => {
+                                        const text = showDebug === 'logs' ? logs : yamlContent;
+                                        navigator.clipboard.writeText(text);
+                                        alert("Copied to clipboard!");
+                                    }}
+                                    className="absolute top-2 right-2 bg-gray-700 hover:bg-gray-600 p-2 rounded opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                                    title="Copy to clipboard"
+                                >
+                                    <List size={14} />
+                                </button>
+                                {isLoadingDebug ? (
+                                    <div className="flex items-center space-x-3 p-4">
+                                        <Loader className="animate-spin text-blue-400" size={18} />
+                                        <span className="text-gray-400">Streaming {showDebug}...</span>
+                                    </div>
+                                ) : (
+                                    <pre className="whitespace-pre-wrap leading-relaxed">{showDebug === 'logs' ? logs : yamlContent}</pre>
+                                )}
                             </div>
                         )}
                     </div>
@@ -701,6 +884,24 @@ const SourceExplorer = ({ source, onClose }) => {
         }
     };
 
+    const handleMacUpdate = async (vmName, networkKey, newMac) => {
+        setIsOperating(true); // Use isOperating for any VM-level operation
+        try {
+            const response = await fetch(`/api/v1/vcenter/vm/${source.metadata.namespace}/${source.metadata.name}/mac`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ vmName, deviceKey: networkKey, newMac })
+            });
+            if (!response.ok) {
+                const data = await response.json();
+                throw new Error(data.error || 'MAC update failed');
+            }
+            await fetchInventory(true); // Refresh inventory to show updated MAC
+        } finally {
+            setIsOperating(false);
+        }
+    };
+
     useEffect(() => {
         fetchInventory();
     }, [source]);
@@ -742,6 +943,7 @@ const SourceExplorer = ({ source, onClose }) => {
                                     vm={selectedVm}
                                     onPowerOp={handlePowerOp}
                                     onRename={handleRename}
+                                    onMacUpdate={handleMacUpdate}
                                     isOperating={isOperating}
                                 />
                             </div>
@@ -763,6 +965,7 @@ const VmIcon = ({ type }) => {
         case 'ClusterComputeResource': return <Server className="w-5 h-5 text-purple-500" />;
         case 'Folder': return <Folder className="w-5 h-5 text-yellow-600" />;
         case 'VirtualMachine': return <HardDrive className="w-5 h-5 text-gray-600" />;
+        case 'disk': return <HardDrive className="w-4 h-4 text-blue-400" />;
         default: return null;
     }
 };
@@ -772,10 +975,11 @@ const InventoryTree = ({ node, onVmSelect, currentlySelectedVm, level = 0 }) => 
     const isParent = node.children && node.children.length > 0;
 
     const handleNodeClick = () => {
+        if (node.type === 'VirtualMachine' || node.type === 'disk') {
+            onVmSelect(node);
+        }
         if (isParent) {
             setIsOpen(!isOpen);
-        } else if (node.type === 'VirtualMachine') {
-            onVmSelect(node);
         }
     };
 
@@ -806,9 +1010,12 @@ const InventoryTree = ({ node, onVmSelect, currentlySelectedVm, level = 0 }) => 
     );
 };
 
-const VmDetailsPanel = ({ vm, onPowerOp, onRename, isOperating }) => {
+const VmDetailsPanel = ({ vm, onPowerOp, onRename, isOperating, onMacUpdate }) => {
     const [isRenaming, setIsRenaming] = useState(false);
     const [newName, setNewName] = useState('');
+    const [editingMacKey, setEditingMacKey] = useState(null);
+    const [newMac, setNewMac] = useState('');
+    const [isUpdatingMac, setIsUpdatingMac] = useState(false);
 
     useEffect(() => {
         if (vm) {
@@ -819,8 +1026,9 @@ const VmDetailsPanel = ({ vm, onPowerOp, onRename, isOperating }) => {
 
     if (!vm) {
         return (
-            <div className="p-4 border rounded-md bg-gray-50 h-full flex items-center justify-center">
-                <p className="text-gray-500">Select a VM to see details</p>
+            <div className="border border-gray-200 rounded-md p-6 bg-gray-50 flex flex-col items-center justify-center text-gray-400 h-96">
+                <Search size={48} className="mb-4 opacity-20" />
+                <p className="text-sm font-medium">Select an item from the tree to view details</p>
             </div>
         );
     }
@@ -831,6 +1039,9 @@ const VmDetailsPanel = ({ vm, onPowerOp, onRename, isOperating }) => {
         }
         setIsRenaming(false);
     };
+
+    const isVm = vm.type === 'VirtualMachine';
+    const isDisk = vm.type === 'disk';
 
     const getPowerStateColor = (state) => {
         switch (state) {
@@ -867,33 +1078,128 @@ const VmDetailsPanel = ({ vm, onPowerOp, onRename, isOperating }) => {
             </div>
 
             <div className="space-y-3 text-sm flex-grow">
-                <div className="flex items-center justify-between p-2 bg-white rounded border">
-                    <span className="text-gray-600 font-medium">Power State:</span>
-                    <span className={`font-bold ${getPowerStateColor(vm.powerState)}`}>{vm.powerState}</span>
-                </div>
+                {isVm && (
+                    <>
+                        <div className="flex items-center justify-between p-2 bg-white rounded border">
+                            <span className="text-gray-600 font-medium">Power State:</span>
+                            <span className={`font-bold ${getPowerStateColor(vm.powerState)}`}>{vm.powerState}</span>
+                        </div>
 
-                <div className="flex items-center">
-                    <Cpu size={16} className="mr-2 text-gray-600" />
-                    <span>{vm.cpu || 'N/A'} vCPU(s)</span>
-                </div>
-                <div className="flex items-center">
-                    <MemoryStick size={16} className="mr-2 text-gray-600" />
-                    <span>{formatBytes((vm.memoryMB || 0) * 1024 * 1024, 0)} Memory</span>
-                </div>
-                <div className="flex items-center">
-                    <HardDrive size={16} className="mr-2 text-gray-600" />
-                    <span>{vm.diskSizeGB || 'N/A'} GB Storage</span>
-                </div>
-                <div className="flex items-center">
-                    <Folder size={16} className="mr-2 text-gray-600" />
-                    <span className="truncate" title={vm.folder || '/'}>{vm.folder || '/'}</span>
-                </div>
-                <div>
-                    <h4 className="font-medium text-gray-800 mt-4 mb-1">Networks</h4>
-                    <ul className="list-disc list-inside pl-2">
-                        {(vm.networks || []).map((net, i) => <li key={i}>{net}</li>)}
-                    </ul>
-                </div>
+                        <div className="flex items-center">
+                            <Cpu size={16} className="mr-2 text-gray-600" />
+                            <span>{vm.cpu || '0'} vCPU(s)</span>
+                        </div>
+                        <div className="flex items-center">
+                            <MemoryStick size={16} className="mr-2 text-gray-600" />
+                            <span>{formatBytes((vm.memoryMB || 0) * 1024 * 1024, 0)} Memory</span>
+                        </div>
+                        <div className="flex items-center">
+                            <HardDrive size={16} className="mr-2 text-gray-600" />
+                            <span>{vm.diskSizeGB || '0'} GB Storage (Committed)</span>
+                        </div>
+                        <div className="flex items-center">
+                            <Folder size={16} className="mr-2 text-gray-600" />
+                            <span className="truncate" title={vm.folder || '/'}>{vm.folder || '/'}</span>
+                        </div>
+                        <div>
+                            <h4 className="font-medium text-gray-800 mt-4 mb-1 border-b pb-1">Networks</h4>
+                            <div className="space-y-2 mt-2">
+                                {(vm.networks || []).map((net, i) => (
+                                    <div key={i} className="flex flex-col p-2 bg-white rounded border shadow-sm">
+                                        <div className="flex justify-between items-center">
+                                            <div className="flex items-center space-x-2 truncate">
+                                                <Network size={14} className="text-blue-500 shrink-0" />
+                                                <span className="text-gray-700 truncate font-medium">{net.name || net}</span>
+                                            </div>
+                                            <div className="flex items-center space-x-2">
+                                                {editingMacKey === net.key ? (
+                                                    <div className="flex items-center space-x-1">
+                                                        <input
+                                                            type="text"
+                                                            value={newMac}
+                                                            onChange={(e) => setNewMac(e.target.value)}
+                                                            className="text-[10px] font-mono border rounded px-1 w-32 py-0.5"
+                                                            autoFocus
+                                                        />
+                                                        <button
+                                                            onClick={() => {
+                                                                setIsUpdatingMac(true);
+                                                                onMacUpdate(vm.name, net.key, newMac)
+                                                                    .then(() => setEditingMacKey(null))
+                                                                    .catch(err => alert(err.message))
+                                                                    .finally(() => setIsUpdatingMac(false));
+                                                            }}
+                                                            disabled={isUpdatingMac}
+                                                            className="text-green-600 hover:text-green-700"
+                                                        >
+                                                            <Check size={14} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setEditingMacKey(null)}
+                                                            className="text-red-600 hover:text-red-700"
+                                                        >
+                                                            <X size={14} />
+                                                        </button>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex items-center space-x-1 group/mac">
+                                                        <span className="text-[10px] font-mono text-gray-500">{net.mac || 'No MAC'}</span>
+                                                        {net.mac && (
+                                                            <button
+                                                                onClick={() => {
+                                                                    setEditingMacKey(net.key);
+                                                                    setNewMac(net.mac);
+                                                                }}
+                                                                className="text-gray-400 hover:text-blue-600 p-0.5 opacity-0 group-hover/mac:opacity-100 transition-opacity"
+                                                                title="Edit MAC Address"
+                                                            >
+                                                                <Edit size={12} />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                                {(!vm.networks || vm.networks.length === 0) && <p className="text-xs text-gray-400 italic">No network interfaces.</p>}
+                            </div>
+                        </div>
+                        <div>
+                            <h4 className="font-medium text-gray-800 mt-4 mb-1 border-b pb-1">Individual Disks</h4>
+                            <div className="space-y-2 mt-2">
+                                {(vm.disks || []).map((disk, i) => (
+                                    <div key={i} className="flex flex-col p-2 bg-white rounded border shadow-sm">
+                                        <div className="flex justify-between items-center bg-gray-50 -m-2 mb-2 px-2 py-1 rounded-t border-b overflow-hidden">
+                                            <span className="font-bold text-gray-700 truncate text-[10px]">{disk.name}</span>
+                                            <span className="text-[10px] font-mono text-blue-600">{disk.busType}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center text-xs">
+                                            <span className="text-gray-600">{formatBytes(disk.capacity)}</span>
+                                            <span className="text-gray-400">Unit: {disk.unitNum}</span>
+                                        </div>
+                                    </div>
+                                ))}
+                                {(!vm.disks || vm.disks.length === 0) && <p className="text-xs text-gray-400 italic">No detailed disk info available.</p>}
+                            </div>
+                        </div>
+                    </>
+                )}
+                {isDisk && (
+                    <div className="p-4 bg-white rounded-lg border shadow-sm space-y-4">
+                        <div className="flex items-center space-x-3 text-blue-600">
+                            <HardDrive size={24} />
+                            <h4 className="text-lg font-semibold">Disk Selection</h4>
+                        </div>
+                        <div className="space-y-2">
+                            <div className="flex justify-between text-sm">
+                                <span className="text-gray-500 font-medium">Node:</span>
+                                <span className="text-gray-900 font-bold">{vm.name}</span>
+                            </div>
+                            <p className="text-xs text-gray-500 italic">This is a virtual disk component of the parent VM. Select the VM node itself to perform power operations.</p>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <div className="mt-6 pt-4 border-t">
@@ -1580,7 +1886,7 @@ const AboutPage = () => (
             <style>{`.github-corner:hover .octo-arm{animation:octocat-wave 560ms ease-in-out}@keyframes octocat-wave{0%,100%{transform:rotate(0)}20%,60%{transform:rotate(-25deg)}40%,80%{transform:rotate(10deg)}}@media (max-width:500px){.github-corner:hover .octo-arm{animation:none}.github-corner .octo-arm{animation:octocat-wave 560ms ease-in-out}}`}</style>
 
             <h2 className="text-xl font-semibold mb-4 z-10 relative">Harvester VM Import UI</h2>
-            <p className="mb-2 z-10 relative"><strong>Version:</strong> 1.3.0</p>
+            <p className="mb-2 z-10 relative"><strong>Version:</strong> 1.5.0</p>
             <p className="mb-2 z-10 relative">This UI provides a user-friendly interface for the Harvester VM Import Controller, allowing users to import virtual machines from a VMware vCenter into a Harvester cluster.</p>
             <p className="mb-6 italic text-sm text-gray-600 z-10 relative mt-2 border-l-4 border-blue-400 pl-3">Based off of an idea by Erico Mendonca (erico.mendonca@suse.com)</p>
 
@@ -1597,7 +1903,7 @@ const AboutPage = () => (
                         <li>Configuring target execution parameters like Namespace and Storage Class.</li>
                         <li>Mapping source networks to Harvester VLANs and specifying advanced interfaces (e.g., virtio, e1000).</li>
                     </ul>
-                    <p className="text-sm mt-1">From the dashboard, you can track the live progress, examine the raw YAML configuration, and view backend logs for each migration.</p>
+                    <p className="text-sm mt-1">From the dashboard, you can track the <strong>live progress with detailed disk import conditions</strong>, examine the raw YAML configuration, and view backend logs for each migration.</p>
                 </div>
 
                 <div>
@@ -1609,7 +1915,7 @@ const AboutPage = () => (
                         <li>The vCenter Endpoint URL and Datacenter Name.</li>
                         <li>Credentials (Username/Password), which are securely stored as Kubernetes Secrets.</li>
                     </ul>
-                    <p className="text-sm mt-1">You can edit these configurations, delete them, or use the <strong>Explore</strong> (search icon) function to browse the vCenter inventory, inspect VM specifications, <strong>manage power states</strong> (On/Off/Reset/Shutdown), and <strong>rename VMs</strong> directly in vCenter.</p>
+                    <p className="text-sm mt-1">You can edit these configurations, delete them, or use the <strong>Explore</strong> (search icon) function to browse the vCenter inventory, inspect VM specifications, <strong>manage power states</strong> (On/Off/Reset/Shutdown), <strong>rename VMs</strong>, and <strong>edit MAC addresses</strong> directly in vCenter.</p>
                 </div>
 
                 <div>
@@ -1636,10 +1942,24 @@ const AboutPage = () => (
 );
 
 export default function App() {
-    const [page, setPage] = useState('plans'); // 'plans', 'sources', 'about'
+    const [expandedPlans, setExpandedPlans] = useState(new Set());
+    const [autoRefresh, setAutoRefresh] = useState(true);
+    const [page, setPage] = useState('plans');
     const [plans, setPlans] = useState([]);
     const [sources, setSources] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
+
+    const toggleExpand = (uid) => {
+        setExpandedPlans(prev => {
+            const next = new Set(prev);
+            if (next.has(uid)) {
+                next.delete(uid);
+            } else {
+                next.add(uid);
+            }
+            return next;
+        });
+    };
     const [selectedPlan, setSelectedPlan] = useState(null);
     const [selectedSource, setSelectedSource] = useState(null);
     const [planToDelete, setPlanToDelete] = useState(null);
@@ -1747,9 +2067,14 @@ export default function App() {
         fetchPlans();
         fetchSources();
         fetchOvaSources();
-        const intervalId = setInterval(fetchPlans, refreshInterval * 1000);
+        const intervalId = setInterval(() => {
+            // Refresh if autoRefresh is enabled
+            if (autoRefresh) {
+                fetchPlans();
+            }
+        }, refreshInterval * 1000);
         return () => clearInterval(intervalId);
-    }, [refreshInterval]);
+    }, [refreshInterval, expandedPlans, autoRefresh]);
 
     const handleCreatePlan = async (planPayload) => {
         try {
@@ -1865,9 +2190,9 @@ export default function App() {
                 name: plan.spec.virtualMachineName,
                 status: getPlanStatus(plan),
                 progress: 0,
-                cpu: 2,
-                memoryMB: 2048,
-                diskSizeGB: 50,
+                cpu: plan.status?.cpu || 'N/A',
+                memoryMB: plan.status?.memoryMB || 0,
+                diskSizeGB: plan.status?.diskImportStatus ? Math.round(plan.status.diskImportStatus.reduce((acc, d) => acc + (d.diskSize || 0), 0) / (1024 * 1024 * 1024)) : 'N/A',
             }]
         };
         setSelectedPlan(detailedPlan);
@@ -1952,11 +2277,33 @@ export default function App() {
                 return (
                     <div>
                         <Header title="VM Migration Plans" onButtonClick={() => setPage('createPlan')} />
-                        {isLoading ? <p>Loading plans...</p> : <ResourceTable plans={sortedPlans} onViewDetails={handleViewDetails} onDelete={setPlanToDelete} sortConfig={plansSort} onSort={handleSort(setPlansSort)} />}
-                        <div className="flex justify-end items-center mt-4 space-x-2">
-                            <button onClick={fetchPlans} className="text-blue-500 hover:text-blue-700"><RefreshCw size={20} /></button>
-                            <input type="number" value={refreshInterval} onChange={e => setRefreshInterval(e.target.value)} className="w-20 form-input text-sm" />
-                            <span className="text-sm text-gray-600">seconds</span>
+                        {isLoading ? <p>Loading plans...</p> : <ResourceTable
+                            plans={sortedPlans}
+                            onViewDetails={handleViewDetails}
+                            onDelete={setPlanToDelete}
+                            sortConfig={plansSort}
+                            onSort={handleSort(setPlansSort)}
+                            expandedPlans={expandedPlans}
+                            toggleExpand={toggleExpand}
+                        />}
+                        <div className="flex justify-end items-center mt-4 space-x-6">
+                            <div className="flex items-center space-x-2">
+                                <input
+                                    type="checkbox"
+                                    id="autoRefreshPlans"
+                                    checked={autoRefresh}
+                                    onChange={e => setAutoRefresh(e.target.checked)}
+                                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                />
+                                <label htmlFor="autoRefreshPlans" className="text-sm font-medium text-gray-700 cursor-pointer">Auto-refresh</label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                                <button onClick={fetchPlans} className="text-blue-500 hover:text-blue-700" title="Refresh Now"><RefreshCw size={20} /></button>
+                                <div className="flex items-center space-x-1">
+                                    <input type="number" value={refreshInterval} onChange={e => setRefreshInterval(e.target.value)} className="w-16 form-input text-sm border rounded px-1" />
+                                    <span className="text-xs text-gray-500">s</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 );

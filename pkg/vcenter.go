@@ -16,12 +16,41 @@ import (
 	"github.com/vmware/govmomi/vim25/types"
 )
 
+func formatDiskSize(bytes int64) string {
+	const unit = 1024
+	if bytes < unit {
+		return fmt.Sprintf("%d B", bytes)
+	}
+	div, exp := int64(unit), 0
+	for n := bytes / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+// VMDisk represents a virtual disk in vCenter
+type VMDisk struct {
+	Name     string `json:"name"`
+	Capacity int64  `json:"capacity"` // in bytes
+	BusType  string `json:"busType"`  // e.g. scsi, ide, sata, nvme
+	UnitNum  int32  `json:"unitNum"`
+}
+
+// VMNetwork represents a network interface in vCenter
+type VMNetwork struct {
+	Name string `json:"name"`
+	MAC  string `json:"mac"`
+	Key  int32  `json:"key"`
+}
+
 // InventoryNode represents a generic node in the vCenter inventory tree.
 type InventoryNode struct {
 	Name       string          `json:"name"`
 	Type       string          `json:"type"`
 	Children   []InventoryNode `json:"children,omitempty"`
-	Networks   []string        `json:"networks,omitempty"`
+	Networks   []VMNetwork     `json:"networks,omitempty"`
+	Disks      []VMDisk        `json:"disks,omitempty"`
 	CPU        int32           `json:"cpu,omitempty"`
 	MemoryMB   int32           `json:"memoryMB,omitempty"`
 	DiskSizeGB int64           `json:"diskSizeGB,omitempty"`
@@ -113,36 +142,74 @@ func processEntity(ctx context.Context, c *govmomi.Client, entity object.Referen
 
 		log.Debugf("Raw VM data from vCenter for %s: %+v", me.Name, mvm)
 
-		var networkNames []string
+		var vmNetworks []VMNetwork
+		var vmDisks []VMDisk
 
 		if mvm.Config != nil {
 			// Get the list of virtual devices from the managed object
 			deviceList := object.VirtualDeviceList(mvm.Config.Hardware.Device)
 
-			// Find all network card devices
+			// Map to find controller types
+			controllers := make(map[int32]string)
+			for _, device := range deviceList {
+				d := device.GetVirtualDevice()
+				switch device.(type) {
+				case *types.VirtualLsiLogicController, *types.VirtualLsiLogicSASController, *types.VirtualBusLogicController, *types.ParaVirtualSCSIController:
+					controllers[d.Key] = "scsi"
+				case *types.VirtualIDEController:
+					controllers[d.Key] = "ide"
+				case *types.VirtualSATAController:
+					controllers[d.Key] = "sata"
+				case *types.VirtualNVMEController:
+					controllers[d.Key] = "nvme"
+				}
+			}
+
+			// Find all network card devices and disks
 			for _, device := range deviceList {
 				// Use a type assertion to see if the device is a network card
 				if card, ok := device.(types.BaseVirtualEthernetCard); ok {
 					// Get the backing info from the network card
 					backing := card.GetVirtualEthernetCard().Backing
 
+					netName := "unknown"
 					switch backingInfo := backing.(type) {
 					case *types.VirtualEthernetCardNetworkBackingInfo:
-						// This handles standard vSwitch networks
-						networkNames = append(networkNames, backingInfo.DeviceName)
+						netName = backingInfo.DeviceName
 					case *types.VirtualEthernetCardDistributedVirtualPortBackingInfo:
-						// This handles distributed vSwitch networks
-						networkNames = append(networkNames, backingInfo.Port.PortgroupKey)
+						netName = backingInfo.Port.PortgroupKey
 					}
+
+					vmNetworks = append(vmNetworks, VMNetwork{
+						Name: netName,
+						MAC:  card.GetVirtualEthernetCard().MacAddress,
+						Key:  card.GetVirtualEthernetCard().Key,
+					})
+				} else if disk, ok := device.(*types.VirtualDisk); ok {
+					busType := "unknown"
+					if t, ok := controllers[disk.ControllerKey]; ok {
+						busType = t
+					}
+					name := "Disk"
+					if disk.DeviceInfo != nil {
+						name = disk.DeviceInfo.GetDescription().Label
+					}
+					vmDisks = append(vmDisks, VMDisk{
+						Name:     name,
+						Capacity: disk.CapacityInBytes,
+						BusType:  busType,
+						UnitNum:  *disk.UnitNumber,
+					})
 				}
 			}
 		} else {
 			log.Warnf("VM '%s' has nil Config, skipping device processing", me.Name)
 		}
 
-		log.Debugf("Successfully found networks for VM '%s': %v\n", me.Name, networkNames)
+		log.Debugf("Successfully found networks for VM '%s': %v\n", me.Name, vmNetworks)
 
-		node.Networks = networkNames
+		node.Networks = vmNetworks
+		node.Disks = vmDisks
 		node.DiskSizeGB = mvm.Summary.Storage.Committed / (1024 * 1024 * 1024)
 
 		node.CPU = mvm.Summary.Config.NumCpu
@@ -170,7 +237,7 @@ func processEntity(ctx context.Context, c *govmomi.Client, entity object.Referen
 				log.Warnf("Could not process child entity %s: %v", child.Reference().Value, err)
 				continue
 			}
-			if childNode != nil && childNode.Type == "Folder" {
+			if childNode != nil {
 				node.Children = append(node.Children, *childNode)
 			}
 		}
@@ -296,6 +363,74 @@ func RenameVM(ctx context.Context, creds VCenterCredentials, oldName string, new
 	}
 
 	task, err := vm.Rename(ctx, newName)
+	if err != nil {
+		return err
+	}
+
+	return task.Wait(ctx)
+}
+
+// UpdateVMNetworkMAC updates the MAC address of a specific network device.
+func UpdateVMNetworkMAC(ctx context.Context, creds VCenterCredentials, vmName string, deviceKey int32, newMAC string) error {
+	fullURL := creds.URL
+	if !strings.HasPrefix(fullURL, "https://") && !strings.HasPrefix(fullURL, "http://") {
+		fullURL = "https://" + fullURL
+	}
+	u, err := url.Parse(fullURL)
+	if err != nil {
+		return err
+	}
+	u.User = url.UserPassword(creds.Username, creds.Password)
+
+	c, err := govmomi.NewClient(ctx, u, true)
+	if err != nil {
+		return err
+	}
+	defer c.Logout(ctx)
+
+	finder := find.NewFinder(c.Client, true)
+	dc, err := finder.Datacenter(ctx, creds.Datacenter)
+	if err != nil {
+		return err
+	}
+	finder.SetDatacenter(dc)
+
+	vm, err := finder.VirtualMachine(ctx, vmName)
+	if err != nil {
+		return err
+	}
+
+	var mvm mo.VirtualMachine
+	pc := property.DefaultCollector(c.Client)
+	if err := pc.RetrieveOne(ctx, vm.Reference(), []string{"config.hardware.device"}, &mvm); err != nil {
+		return err
+	}
+
+	deviceList := object.VirtualDeviceList(mvm.Config.Hardware.Device)
+	device := deviceList.FindByKey(deviceKey)
+	if device == nil {
+		return fmt.Errorf("device with key %d not found", deviceKey)
+	}
+
+	nic, ok := device.(types.BaseVirtualEthernetCard)
+	if !ok {
+		return fmt.Errorf("device with key %d is not a network card", deviceKey)
+	}
+
+	card := nic.GetVirtualEthernetCard()
+	card.MacAddress = newMAC
+	card.AddressType = "manual"
+
+	spec := types.VirtualMachineConfigSpec{
+		DeviceChange: []types.BaseVirtualDeviceConfigSpec{
+			&types.VirtualDeviceConfigSpec{
+				Operation: types.VirtualDeviceConfigSpecOperationEdit,
+				Device:    device,
+			},
+		},
+	}
+
+	task, err := vm.Reconfigure(ctx, spec)
 	if err != nil {
 		return err
 	}

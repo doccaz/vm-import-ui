@@ -917,3 +917,57 @@ func HandleVMRename(clients *K8sClients) http.HandlerFunc {
 		respondWithJSON(w, http.StatusOK, map[string]string{"message": "Rename successful"})
 	}
 }
+
+type UpdateVMMACRequest struct {
+	VMName    string `json:"vmName"`
+	DeviceKey int32  `json:"deviceKey"`
+	NewMAC    string `json:"newMac"`
+}
+
+func HandleUpdateVMMAC(clients *K8sClients) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		namespace := vars["namespace"]
+		name := vars["name"]
+
+		var req UpdateVMMACRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			respondWithError(w, http.StatusBadRequest, "Invalid request body")
+			return
+		}
+
+		log.Infof("MAC address update requested for VM '%s' (device %d) to '%s' via VmwareSource %s/%s", req.VMName, req.DeviceKey, req.NewMAC, namespace, name)
+
+		sourceObj, err := clients.Dynamic.Resource(vmwareSourceGVR).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Failed to get VmwareSource: "+err.Error())
+			return
+		}
+
+		endpoint, _, _ := unstructured.NestedString(sourceObj.Object, "spec", "endpoint")
+		datacenter, _, _ := unstructured.NestedString(sourceObj.Object, "spec", "dc")
+		secretName, _, _ := unstructured.NestedString(sourceObj.Object, "spec", "credentials", "name")
+		secretNamespace, _, _ := unstructured.NestedString(sourceObj.Object, "spec", "credentials", "namespace")
+
+		secret, err := clients.Clientset.CoreV1().Secrets(secretNamespace).Get(context.TODO(), secretName, metav1.GetOptions{})
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Failed to get credentials secret: "+err.Error())
+			return
+		}
+
+		creds := VCenterCredentials{
+			URL:        endpoint,
+			Username:   string(secret.Data["username"]),
+			Password:   string(secret.Data["password"]),
+			Datacenter: datacenter,
+		}
+
+		if err := UpdateVMNetworkMAC(r.Context(), creds, req.VMName, req.DeviceKey, req.NewMAC); err != nil {
+			log.Errorf("Failed to update VM MAC: %v", err)
+			respondWithError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		respondWithJSON(w, http.StatusOK, map[string]string{"message": "MAC address updated successfully"})
+	}
+}
