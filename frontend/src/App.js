@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, ChevronRight, Server, Folder, Cloud, HardDrive, ArrowRight, X, Loader, CheckCircle, Clock, Cpu, MemoryStick, Trash2, Edit, AlertTriangle, RefreshCw, List, Package, Info, ChevronUp, ChevronDown, Search, Play, Square, RotateCcw, Power, CheckCircle2, AlertCircle, HelpCircle, XCircle, Network, Check } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { Plus, ChevronRight, Server, Folder, Cloud, HardDrive, ArrowRight, X, Loader, CheckCircle, Cpu, MemoryStick, Trash2, Edit, AlertTriangle, RefreshCw, List, Package, Info, ChevronUp, ChevronDown, Search, Play, Square, RotateCcw, Power, CheckCircle2, HelpCircle, XCircle, Network, Check } from 'lucide-react';
 
 // --- Helper Functions ---
 const formatBytes = (bytes, decimals = 2) => {
@@ -9,19 +9,6 @@ const formatBytes = (bytes, decimals = 2) => {
     const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
-};
-
-const formatSeconds = (seconds) => {
-    if (seconds === Infinity || isNaN(seconds) || seconds < 0) return '...';
-    const d = Math.floor(seconds / (3600 * 24));
-    const h = Math.floor(seconds % (3600 * 24) / 3600);
-    const m = Math.floor(seconds % 3600 / 60);
-    const s = Math.floor(seconds % 60);
-
-    if (d > 0) return `${d}d ${h}h`;
-    if (h > 0) return `${h}h ${m}m`;
-    if (m > 0) return `${m}m ${s}s`;
-    return `${s}s`;
 };
 
 const formatDate = (dateString) => {
@@ -87,7 +74,7 @@ const getPlanStatus = (plan) => {
     return 'Pending';
 };
 
-const ResourceTable = ({ plans, onViewDetails, onDelete, sortConfig, onSort, expandedPlans, toggleExpand }) => {
+const ResourceTable = ({ plans, onViewDetails, onDelete, sortConfig, onSort, expandedPlans, toggleExpand, selectedDisks, setSelectedDisks }) => {
     const renderStatusIcon = (status) => {
         if (status === 'True') return <CheckCircle2 size={14} className="text-green-500 mr-1" />;
         if (status === 'False') return <XCircle size={14} className="text-red-500 mr-1" />;
@@ -95,7 +82,7 @@ const ResourceTable = ({ plans, onViewDetails, onDelete, sortConfig, onSort, exp
     };
 
     return (
-        <div className="bg-white shadow-md rounded-lg overflow-hidden">
+        <div className="bg-white shadow-md rounded-lg">
             <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                     <tr>
@@ -138,6 +125,46 @@ const ResourceTable = ({ plans, onViewDetails, onDelete, sortConfig, onSort, exp
                                 {expandedPlans.has(plan.metadata.uid) && (
                                     <tr className="bg-gray-50">
                                         <td colSpan="8" className="px-6 py-4">
+                                            {(() => {
+                                                const cpu = plan.status?.cpu || plan.metadata.annotations?.['migration.harvesterhci.io/original-cpu'];
+                                                const mem = plan.status?.memoryMB || plan.metadata.annotations?.['migration.harvesterhci.io/original-memory-mb'];
+                                                const disks = plan.status?.diskImportStatus || plan.status?.diskStatus || plan.status?.planStatus?.disks || [];
+                                                const diskSizeGB = disks.length > 0
+                                                    ? (disks.reduce((acc, d) => acc + (d.diskSize || d.size || 0), 0) / (1024 * 1024 * 1024)).toFixed(0)
+                                                    : plan.metadata.annotations?.['migration.harvesterhci.io/original-disk-size-gb'];
+
+                                                const annotationTitle = "Data from original VM characteristics (vCenter source)";
+
+                                                return (cpu || mem || diskSizeGB) && (
+                                                    <div className="mb-4 flex flex-wrap gap-4 text-[11px] p-2 bg-blue-50/50 rounded-md border border-blue-100 items-center">
+                                                        <span className="font-bold text-blue-700 uppercase tracking-tight">Source Characteristics:</span>
+                                                        <div className="flex items-center" title={!plan.status?.cpu && plan.metadata.annotations?.['migration.harvesterhci.io/original-cpu'] ? annotationTitle : undefined}>
+                                                            <Cpu size={12} className="mr-1 text-gray-400" />
+                                                            <span>{cpu || 'N/A'} vCPU</span>
+                                                            {!plan.status?.cpu && plan.metadata.annotations?.['migration.harvesterhci.io/original-cpu'] && <span className="ml-0.5 text-blue-500 cursor-help">*</span>}
+                                                        </div>
+                                                        <div className="flex items-center" title={!plan.status?.memoryMB && plan.metadata.annotations?.['migration.harvesterhci.io/original-memory-mb'] ? annotationTitle : undefined}>
+                                                            <MemoryStick size={12} className="mr-1 text-gray-400" />
+                                                            <span>{mem ? formatBytes(parseInt(mem) * 1024 * 1024, 0) : 'N/A'}</span>
+                                                            {!plan.status?.memoryMB && plan.metadata.annotations?.['migration.harvesterhci.io/original-memory-mb'] && <span className="ml-0.5 text-blue-500 cursor-help">*</span>}
+                                                        </div>
+                                                        <div className="flex items-center" title={!plan.status?.diskImportStatus && plan.metadata.annotations?.['migration.harvesterhci.io/original-disk-size-gb'] ? annotationTitle : undefined}>
+                                                            <HardDrive size={12} className="mr-1 text-gray-400" />
+                                                            <span>
+                                                                {diskSizeGB || 'N/A'} GB
+                                                                {(() => {
+                                                                    const originalDiskGB = plan.metadata.annotations?.['migration.harvesterhci.io/original-disk-size-gb'];
+                                                                    if (disks.length > 0 && originalDiskGB && originalDiskGB !== diskSizeGB) {
+                                                                        return <span className="text-gray-400 ml-1">({originalDiskGB} GB originally)</span>;
+                                                                    }
+                                                                    return null;
+                                                                })()}
+                                                            </span>
+                                                            {!(disks.length > 0) && plan.metadata.annotations?.['migration.harvesterhci.io/original-disk-size-gb'] && <span className="ml-0.5 text-blue-500 cursor-help">*</span>}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })()}
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                 <div>
                                                     <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Import Conditions</h4>
@@ -159,25 +186,67 @@ const ResourceTable = ({ plans, onViewDetails, onDelete, sortConfig, onSort, exp
                                                 </div>
                                                 <div>
                                                     <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Disk Import Status</h4>
-                                                    <div className="space-y-2 max-h-48 overflow-y-auto pr-2">
-                                                        {(plan.status?.diskImportStatus || plan.status?.diskStatus || plan.status?.planStatus?.disks || []).map((d, i) => (
-                                                            <div key={i} className="text-sm bg-white p-2 rounded border shadow-sm">
-                                                                <div className="flex justify-between items-start mb-1">
-                                                                    <div className="flex flex-col truncate mr-2">
-                                                                        <span className="font-medium text-gray-700 truncate" title={d.diskName || d.name || d.Name}>{d.diskName || d.name || d.Name || `Disk ${i}`}</span>
-                                                                        <span className="text-[10px] text-gray-400 font-mono">Size: {formatBytes(d.diskSize || d.size || 0)}</span>
+                                                    <div className="space-y-3">
+                                                        {(() => {
+                                                            const disks = plan.status?.diskImportStatus || plan.status?.diskStatus || plan.status?.planStatus?.disks || [];
+                                                            if (disks.length === 0) return <p className="text-xs text-gray-500 italic">No disk progress reported yet.</p>;
+
+                                                            const diskIndex = selectedDisks[plan.metadata.uid] || 0;
+                                                            const d = disks[diskIndex] || disks[0];
+
+                                                            return (
+                                                                <div className="space-y-4">
+                                                                    {disks.length > 1 && (
+                                                                        <div className="flex items-center space-x-2">
+                                                                            <label className="text-[10px] font-bold text-gray-400 uppercase">Select Disk:</label>
+                                                                            <select
+                                                                                className="text-xs border rounded pl-1 pr-8 py-0.5 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 form-select"
+                                                                                value={diskIndex}
+                                                                                onChange={(e) => setSelectedDisks(prev => ({ ...prev, [plan.metadata.uid]: parseInt(e.target.value, 10) }))}
+                                                                            >
+                                                                                {disks.map((disk, idx) => (
+                                                                                    <option key={idx} value={idx}>
+                                                                                        {disk.diskName || disk.name || disk.Name || `Disk ${idx}`}
+                                                                                    </option>
+                                                                                ))}
+                                                                            </select>
+                                                                        </div>
+                                                                    )}
+
+                                                                    <div className="text-sm bg-white p-3 rounded border shadow-sm">
+                                                                        <div className="flex justify-between items-start mb-1">
+                                                                            <div className="flex flex-col truncate mr-2">
+                                                                                <span className="font-medium text-gray-700 truncate" title={d.diskName || d.name || d.Name}>{d.diskName || d.name || d.Name || `Disk ${diskIndex}`}</span>
+                                                                                <span className="text-[10px] text-gray-400 font-mono">Size: {formatBytes(d.diskSize || d.size || 0)}</span>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        <div className="mt-3 space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                                                                            <h5 className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Disk Events</h5>
+                                                                            {(() => {
+                                                                                const conditions = d.diskConditions || d.conditions || [];
+                                                                                return conditions.length > 0 ? (
+                                                                                    conditions.map((c, ci) => (
+                                                                                        <div key={`${diskIndex}-${ci}`} className="flex items-start text-[11px] border-b border-gray-50 last:border-0 pb-1">
+                                                                                            <span className="mt-0.5">{renderStatusIcon(c.status || c.Status)}</span>
+                                                                                            <div className="flex-grow">
+                                                                                                <div className="flex justify-between items-center">
+                                                                                                    <span className="font-medium text-gray-700">{c.type || c.Type}</span>
+                                                                                                    <span className="text-[9px] text-gray-400 font-mono">{formatDate(c.lastTransitionTime || c.lastUpdateTime || c.LastUpdateTime)}</span>
+                                                                                                </div>
+                                                                                                <div className="text-gray-500 text-[10px] leading-tight">{c.message || c.Message || (c.status === 'True' || c.Status === 'True' ? 'Task completed' : '')}</div>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    ))
+                                                                                ) : (
+                                                                                    <p className="text-[10px] text-gray-400 italic">{d.status || d.Status || 'Initialising...'}</p>
+                                                                                );
+                                                                            })()}
+                                                                        </div>
                                                                     </div>
-                                                                    <span className="text-xs font-bold text-blue-600">{d.progress ?? 0}%</span>
                                                                 </div>
-                                                                <div className="w-full bg-gray-200 rounded-full h-1.5 mb-1">
-                                                                    <div className="bg-blue-600 h-1.5 rounded-full" style={{ width: `${d.progress ?? 0}%` }}></div>
-                                                                </div>
-                                                                <p className="text-[10px] text-gray-500 truncate" title={d.status || d.Status || (d.diskConditions?.[d.diskConditions.length - 1]?.type)}>
-                                                                    {d.status || d.Status || (d.diskConditions?.[d.diskConditions.length - 1]?.type) || 'Initialising...'}
-                                                                </p>
-                                                            </div>
-                                                        ))}
-                                                        {(!plan.status?.diskImportStatus && !plan.status?.diskStatus && !plan.status?.planStatus?.disks) && <p className="text-xs text-gray-500 italic">No disk progress reported yet.</p>}
+                                                            );
+                                                        })()}
                                                     </div>
                                                 </div>
                                             </div>
@@ -569,13 +638,14 @@ const PlanDetails = ({ plan, onClose }) => {
     const [yamlContent, setYamlContent] = useState('');
     const [showDebug, setShowDebug] = useState(null); // 'logs' or 'yaml'
     const [isLoadingDebug, setIsLoadingDebug] = useState(false);
+    const [onlyRelevantLogs, setOnlyRelevantLogs] = useState(true);
 
-    const fetchLogs = async () => {
+    const fetchLogs = async (showAll = !onlyRelevantLogs) => {
         setIsLoadingDebug(true);
         try {
-            const response = await fetch(`/api/v1/plans/${plan.metadata.namespace}/${plan.metadata.name}/logs`);
+            const response = await fetch(`/api/v1/plans/${plan.metadata.namespace}/${plan.metadata.name}/logs${showAll ? '?all=true' : ''}`);
             const data = await response.text();
-            setLogs(data || "No relevant logs found.");
+            setLogs(data || "No logs found.");
         } catch (err) {
             setLogs("Failed to fetch logs.");
         } finally {
@@ -623,19 +693,61 @@ const PlanDetails = ({ plan, onClose }) => {
                         <div>
                             <h3 className="text-lg font-medium text-gray-900 mb-2">VM Characteristics</h3>
                             <div className="p-3 bg-gray-50 rounded-md border text-sm space-y-2">
-                                <div className="flex items-center">
-                                    <Cpu size={16} className="mr-2 text-gray-600" />
-                                    <span>{plan.status?.cpu || plan.vms?.[0]?.cpu || 'N/A'} vCPU(s)</span>
-                                </div>
-                                <div className="flex items-center">
-                                    <MemoryStick size={16} className="mr-2 text-gray-600" />
-                                    <span>{plan.status?.memoryMB ? formatBytes(plan.status.memoryMB * 1024 * 1024, 0) :
-                                        (plan.vms?.[0]?.memoryMB ? formatBytes(plan.vms[0].memoryMB * 1024 * 1024, 0) : 'N/A')} Memory</span>
-                                </div>
-                                <div className="flex items-center">
-                                    <HardDrive size={16} className="mr-2 text-gray-600" />
-                                    <span>{plan.status?.diskImportStatus ? (plan.status.diskImportStatus.reduce((acc, d) => acc + (d.diskSize || 0), 0) / (1024 * 1024 * 1024)).toFixed(0) : (plan.vms?.[0]?.diskSizeGB || 'N/A')} GB Storage</span>
-                                </div>
+                                {(() => {
+                                    const getAnnotation = (key) => plan.metadata.annotations?.[key];
+                                    const originalCpu = getAnnotation('migration.harvesterhci.io/original-cpu');
+                                    const originalMemoryMB = getAnnotation('migration.harvesterhci.io/original-memory-mb');
+                                    const originalDiskGB = getAnnotation('migration.harvesterhci.io/original-disk-size-gb');
+
+                                    const cpu = plan.status?.cpu || originalCpu;
+                                    const memoryMB = plan.status?.memoryMB || originalMemoryMB;
+                                    const diskSizeGB = plan.status?.diskImportStatus
+                                        ? (plan.status.diskImportStatus.reduce((acc, d) => acc + (d.diskSize || d.size || 0), 0) / (1024 * 1024 * 1024)).toFixed(0)
+                                        : originalDiskGB;
+
+                                    const annotationTitle = "Data from original VM characteristics (vCenter source)";
+
+                                    return (
+                                        <>
+                                            <div className="flex items-center">
+                                                <Cpu size={16} className="mr-2 text-gray-600" />
+                                                <span>
+                                                    {cpu || 'N/A'} vCPU(s)
+                                                    {plan.status?.cpu && originalCpu && originalCpu !== cpu && (
+                                                        <span className="text-gray-400 ml-1">({originalCpu} originally)</span>
+                                                    )}
+                                                </span>
+                                                {!plan.status?.cpu && originalCpu && (
+                                                    <span className="ml-1 text-blue-500 cursor-help" title={annotationTitle}>*</span>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center">
+                                                <MemoryStick size={16} className="mr-2 text-gray-600" />
+                                                <span>
+                                                    {memoryMB ? formatBytes(parseInt(memoryMB) * 1024 * 1024, 0) : 'N/A'} Memory
+                                                    {plan.status?.memoryMB && originalMemoryMB && originalMemoryMB !== memoryMB && (
+                                                        <span className="text-gray-400 ml-1">({formatBytes(parseInt(originalMemoryMB) * 1024 * 1024, 0)} originally)</span>
+                                                    )}
+                                                </span>
+                                                {!plan.status?.memoryMB && originalMemoryMB && (
+                                                    <span className="ml-1 text-blue-500 cursor-help" title={annotationTitle}>*</span>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center">
+                                                <HardDrive size={16} className="mr-2 text-gray-600" />
+                                                <span>
+                                                    {diskSizeGB || 'N/A'} GB Storage
+                                                    {plan.status?.diskImportStatus && originalDiskGB && originalDiskGB !== diskSizeGB && (
+                                                        <span className="text-gray-400 ml-1">({originalDiskGB} GB originally)</span>
+                                                    )}
+                                                </span>
+                                                {!plan.status?.diskImportStatus && originalDiskGB && (
+                                                    <span className="ml-1 text-blue-500 cursor-help" title={annotationTitle}>*</span>
+                                                )}
+                                            </div>
+                                        </>
+                                    );
+                                })()}
                                 <div className="flex items-center">
                                     <Folder size={16} className="mr-2 text-gray-600" />
                                     <span>{plan.spec?.folder || '/'}</span>
@@ -758,6 +870,21 @@ const PlanDetails = ({ plan, onClose }) => {
                             >
                                 Debug Logs
                             </button>
+                            {showDebug === 'logs' && (
+                                <label className="flex items-center text-xs text-gray-400 cursor-pointer ml-auto pb-2">
+                                    <input
+                                        type="checkbox"
+                                        checked={onlyRelevantLogs}
+                                        onChange={(e) => {
+                                            const newVal = e.target.checked;
+                                            setOnlyRelevantLogs(newVal);
+                                            fetchLogs(!newVal);
+                                        }}
+                                        className="mr-1 h-3 w-3"
+                                    />
+                                    Only relevant
+                                </label>
+                            )}
                             <button
                                 onClick={() => handleShowDebug('yaml')}
                                 className={`pb-2 text-sm font-medium transition-colors ${showDebug === 'yaml' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
@@ -805,7 +932,7 @@ const SourceExplorer = ({ source, onClose }) => {
     const [selectedVm, setSelectedVm] = useState(null);
     const [isOperating, setIsOperating] = useState(false);
 
-    const fetchInventory = async (keepSelection = false) => {
+    const fetchInventory = useCallback(async (keepSelection = false) => {
         setIsLoading(true);
         setError('');
         try {
@@ -816,29 +943,33 @@ const SourceExplorer = ({ source, onClose }) => {
             }
             const data = await response.json();
             setInventory(data);
+
             if (!keepSelection) {
                 setSelectedVm(null);
-            } else if (selectedVm) {
-                // Find and update selected VM in new data
-                const findVm = (node, name) => {
-                    if (node.type === 'VirtualMachine' && node.name === name) return node;
-                    if (node.children) {
-                        for (const child of node.children) {
-                            const found = findVm(child, name);
-                            if (found) return found;
+            } else {
+                setSelectedVm(current => {
+                    if (!current) return null;
+                    // Find and update selected VM in new data
+                    const findVm = (node, name) => {
+                        if (node.type === 'VirtualMachine' && node.name === name) return node;
+                        if (node.children) {
+                            for (const child of node.children) {
+                                const found = findVm(child, name);
+                                if (found) return found;
+                            }
                         }
-                    }
-                    return null;
-                };
-                const updated = findVm(data, selectedVm.name);
-                if (updated) setSelectedVm(updated);
+                        return null;
+                    };
+                    const updated = findVm(data, current.name);
+                    return updated || current;
+                });
             }
         } catch (err) {
             setError(err.message);
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [source]); // Now stable regardless of selection
 
     const handlePowerOp = async (op) => {
         if (!selectedVm) return;
@@ -904,7 +1035,7 @@ const SourceExplorer = ({ source, onClose }) => {
 
     useEffect(() => {
         fetchInventory();
-    }, [source]);
+    }, [source, fetchInventory]);
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 z-50">
@@ -1399,7 +1530,9 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
 
     const sourceNetworks = useMemo(() => {
         if (!selectedVm) return [];
-        return selectedVm.networks || [];
+        const networks = selectedVm.networks || [];
+        // Extract names and ensure uniqueness to avoid duplicate keys in React
+        return [...new Set(networks.map(n => n.name || n.Name || 'Unknown Network'))];
     }, [selectedVm]);
 
     const handleCreateNamespace = async () => {
@@ -1449,6 +1582,13 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
             metadata: {
                 name: slugify(planName),
                 namespace: finalTargetNamespace,
+                annotations: sourceType === 'vmware' && selectedVm ? {
+                    'migration.harvesterhci.io/original-cpu': selectedVm.cpu?.toString() || '0',
+                    'migration.harvesterhci.io/original-memory-mb': selectedVm.memoryMB?.toString() || '0',
+                    'migration.harvesterhci.io/original-disk-size-gb': selectedVm.diskSizeGB?.toString() || '0',
+                    'migration.harvesterhci.io/original-disks': JSON.stringify(selectedVm.disks || []),
+                    'migration.harvesterhci.io/original-networks': JSON.stringify(selectedVm.networks || []),
+                } : undefined
             },
             spec: {
                 virtualMachineName: originalVmName,
@@ -1853,7 +1993,32 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
                 <button onClick={onCancel} className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-md">Cancel</button>
                 <div>
                     {step > 1 && <button onClick={() => setStep(s => s - 1)} className="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-md mr-2">Back</button>}
-                    {step < 4 && <button onClick={() => setStep(s => s + 1)} disabled={vmNameConflict} className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-md disabled:opacity-50">Next</button>}
+                    {step < 4 && (
+                        <button
+                            onClick={() => {
+                                if (step === 1) {
+                                    const dnsRegex = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$/;
+                                    if (!planName) {
+                                        alert("Plan name is required.");
+                                        return;
+                                    }
+                                    if (!dnsRegex.test(planName)) {
+                                        alert("Plan name must consist of lower case alphanumeric characters, '-' or '.', and must start and end with an alphanumeric character.");
+                                        return;
+                                    }
+                                    if (planName.length > 63) {
+                                        alert("Plan name must be no more than 63 characters.");
+                                        return;
+                                    }
+                                }
+                                setStep(s => s + 1);
+                            }}
+                            disabled={vmNameConflict}
+                            className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-md disabled:opacity-50"
+                        >
+                            Next
+                        </button>
+                    )}
                     {step === 4 && <button onClick={handleSubmit} className="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-md">Create Plan</button>}
                 </div>
             </div>
@@ -1886,7 +2051,7 @@ const AboutPage = () => (
             <style>{`.github-corner:hover .octo-arm{animation:octocat-wave 560ms ease-in-out}@keyframes octocat-wave{0%,100%{transform:rotate(0)}20%,60%{transform:rotate(-25deg)}40%,80%{transform:rotate(10deg)}}@media (max-width:500px){.github-corner:hover .octo-arm{animation:none}.github-corner .octo-arm{animation:octocat-wave 560ms ease-in-out}}`}</style>
 
             <h2 className="text-xl font-semibold mb-4 z-10 relative">Harvester VM Import UI</h2>
-            <p className="mb-2 z-10 relative"><strong>Version:</strong> 1.5.0</p>
+            <p className="mb-2 z-10 relative"><strong>Version:</strong> 1.6.0</p>
             <p className="mb-2 z-10 relative">This UI provides a user-friendly interface for the Harvester VM Import Controller, allowing users to import virtual machines from a VMware vCenter into a Harvester cluster.</p>
             <p className="mb-6 italic text-sm text-gray-600 z-10 relative mt-2 border-l-4 border-blue-400 pl-3">Based off of an idea by Erico Mendonca (erico.mendonca@suse.com)</p>
 
@@ -1943,6 +2108,7 @@ const AboutPage = () => (
 
 export default function App() {
     const [expandedPlans, setExpandedPlans] = useState(new Set());
+    const [selectedDisks, setSelectedDisks] = useState({}); // planUid -> diskIndex
     const [autoRefresh, setAutoRefresh] = useState(true);
     const [page, setPage] = useState('plans');
     const [plans, setPlans] = useState([]);
@@ -2241,7 +2407,7 @@ export default function App() {
                 return <SourceDetails source={selectedSource} onClose={() => setPage('sources')} />;
             case 'sources':
                 return (
-                    <div>
+                    <div className="pr-6">
                         <Header title="vCenter Sources" onButtonClick={() => { setSourceToEdit(null); setShowSourceWizard(true); }} />
                         <SourcesTable
                             sources={sortedSources}
@@ -2260,7 +2426,7 @@ export default function App() {
                 return <OvaSourceDetails source={selectedOvaSource} onClose={() => setPage('ovaSources')} />;
             case 'ovaSources':
                 return (
-                    <div>
+                    <div className="pr-6">
                         <Header title="OVA Sources" onButtonClick={() => { setOvaSourceToEdit(null); setShowOvaSourceWizard(true); }} />
                         <OvaSourcesTable sources={sortedOvaSources} onEdit={handleEditOvaSource} onDelete={setOvaSourceToDelete} onViewDetails={(source) => { setSelectedOvaSource(source); setPage('ovaSourceDetails'); }} sortConfig={ovaSourcesSort} onSort={handleSort(setOvaSourcesSort)} />
                         <div className="flex justify-end items-center mt-4 space-x-2">
@@ -2275,7 +2441,7 @@ export default function App() {
             case 'plans':
             default:
                 return (
-                    <div>
+                    <div className="pr-6">
                         <Header title="VM Migration Plans" onButtonClick={() => setPage('createPlan')} />
                         {isLoading ? <p>Loading plans...</p> : <ResourceTable
                             plans={sortedPlans}
@@ -2285,6 +2451,8 @@ export default function App() {
                             onSort={handleSort(setPlansSort)}
                             expandedPlans={expandedPlans}
                             toggleExpand={toggleExpand}
+                            selectedDisks={selectedDisks}
+                            setSelectedDisks={setSelectedDisks}
                         />}
                         <div className="flex justify-end items-center mt-4 space-x-6">
                             <div className="flex items-center space-x-2">
@@ -2311,7 +2479,7 @@ export default function App() {
     };
 
     return (
-        <div className="bg-gray-100 min-h-screen p-8 font-sans">
+        <div className="bg-gray-100 min-h-screen p-8 pr-12 font-sans">
             <nav className="mb-6 border-b flex space-x-4">
                 <button onClick={() => setPage('plans')} className={`px-4 py-2 flex items-center font-medium transition-colors ${page === 'plans' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600 hover:text-gray-800'}`}><List size={18} className="mr-2" /> Migration Plans</button>
                 <button onClick={() => setPage('sources')} className={`px-4 py-2 flex items-center font-medium transition-colors ${page === 'sources' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600 hover:text-gray-800'}`}><Server size={18} className="mr-2" /> vCenter Sources</button>

@@ -3,11 +3,23 @@
 This add-on provides a user-friendly web interface for the Harvester VM Import Controller, allowing users to import virtual machines from vCenter into Harvester through a simple, wizard-driven process.
 
 # Features
-* Manage vCenter sources directly from the UI (Create/Delete).
-* Select a pre-configured vCenter source to browse its inventory.
-* Manage plans: See details or delete with confirmation.
-* Map source vCenter networks to target Harvester VLANs.
-* Select a target Harvester Namespace and StorageClass for imported VMs.
+* **Multi-Source Support**: Import from VMware vCenter or flat OVA files.
+* **Source Explorer**:
+    * Browse vCenter inventory directly.
+    * Perform VM operations (Power On/Off/Reboot, Rename) before migration.
+    * View and **edit VM MAC addresses** for the source VM via API.
+    * View and **edit VM Name** for the source VM via API.
+* **Smart Migration Plans**:
+    * Automated mapping of networks and storage.
+    * **Annotations Tracking**: Original VM characteristics (CPU, Memory, Disks) are saved for transparency.
+    * **Resource Comparison**: Easily compare source VM characteristics with current import status.
+* **Streamlined Debugging**:
+    * Integrated log viewer for the VM Import Controller.
+    * Toggle between full controller logs or **filtered logs** relevant to your specific plan.
+* **Management**: Monitor progress, view YAML, and delete plans with safety confirmations.
+
+# Latest Release (v1.6.0)
+The latest version includes enhanced UI spacing, Kubernetes-compliant plan name validation, and more robust VM metadata tracking.
 
 
 # Quick Start (TL;DR)

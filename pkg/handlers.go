@@ -531,21 +531,22 @@ func HandleGetPlanLogs(clients *K8sClients) http.HandlerFunc {
 		defer podLogs.Close()
 
 		// 4. Filter logs for the specific plan and its source
-		var relevantLogs strings.Builder
+		var logOutput strings.Builder
 		scanner := bufio.NewScanner(podLogs)
 		planSearchString := fmt.Sprintf("'%s/%s'", namespace, name)
 		sourceSearchString := fmt.Sprintf("'%s/%s'", sourceNamespace, sourceName)
+		showAll := r.URL.Query().Get("all") == "true"
 
 		for scanner.Scan() {
 			line := scanner.Text()
-			if strings.Contains(line, planSearchString) || strings.Contains(line, sourceSearchString) {
-				relevantLogs.WriteString(line + "\n")
+			if showAll || strings.Contains(line, planSearchString) || strings.Contains(line, sourceSearchString) {
+				logOutput.WriteString(line + "\n")
 			}
 		}
 
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(relevantLogs.String()))
+		w.Write([]byte(logOutput.String()))
 	}
 }
 
