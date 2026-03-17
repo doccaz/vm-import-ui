@@ -1632,8 +1632,13 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
         switch (step) {
             case 1:
                 return (
-                    <div>
+                    <div className="space-y-4">
                         <h3 className="text-lg font-medium text-gray-900 mb-2">Select Source & VM</h3>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700">Plan Name</label>
+                            <input type="text" value={planName} onChange={e => setPlanName(e.target.value)} className="mt-1 block w-full form-input" />
+                        </div>
 
                         <div className="mb-4 flex items-center space-x-6">
                             <label className="inline-flex items-center">
@@ -1725,10 +1730,6 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
                         )}
 
                         <div className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700">Plan Name</label>
-                                <input type="text" value={planName} onChange={e => setPlanName(e.target.value)} className="mt-1 block w-full form-input" />
-                            </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700">Target Namespace</label>
                                 <select value={targetNamespace} onChange={e => setTargetNamespace(e.target.value)} className="mt-1 block w-full form-select">
