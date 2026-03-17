@@ -1066,8 +1066,8 @@ const SourceExplorer = ({ source, onClose }) => {
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full overflow-hidden">
-                            <div className="border border-gray-200 rounded-md p-2 overflow-y-auto bg-white shadow-sm font-sans">
-                                {inventory && <InventoryTree node={inventory} onVmSelect={setSelectedVm} currentlySelectedVm={selectedVm} />}
+                            <div className="border border-gray-200 rounded-md p-2 flex flex-col overflow-hidden bg-white shadow-sm font-sans">
+                                {inventory && <FilterableInventoryTree node={inventory} onVmSelect={setSelectedVm} currentlySelectedVm={selectedVm} />}
                             </div>
                             <div className="overflow-y-auto">
                                 <VmDetailsPanel
@@ -1101,9 +1101,85 @@ const VmIcon = ({ type }) => {
     }
 };
 
-const InventoryTree = ({ node, onVmSelect, currentlySelectedVm, level = 0 }) => {
-    const [isOpen, setIsOpen] = useState(level < 2);
+const filterInventory = (node, query) => {
+    if (!query) return node;
+    const lowerQuery = query.toLowerCase();
+
+    if (node.type === 'VirtualMachine' || node.type === 'disk') {
+        if (node.name.toLowerCase().includes(lowerQuery)) {
+            return node;
+        }
+        return null;
+    }
+
+    if (node.children && node.children.length > 0) {
+        const filteredChildren = node.children
+            .map(child => filterInventory(child, query))
+            .filter(child => child !== null);
+
+        if (filteredChildren.length > 0) {
+            return { ...node, children: filteredChildren };
+        }
+    }
+
+    return null;
+};
+
+const FilterableInventoryTree = ({ node, onVmSelect, currentlySelectedVm }) => {
+    const [searchQuery, setSearchQuery] = useState('');
+
+    const filteredNode = useMemo(() => {
+        return filterInventory(node, searchQuery);
+    }, [node, searchQuery]);
+
+    return (
+        <div className="flex flex-col h-full overflow-hidden">
+            <div className="mb-2 shrink-0 flex items-center">
+                {searchQuery && (
+                    <button
+                        onClick={() => setSearchQuery('')}
+                        className="mr-2 p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors focus:outline-none"
+                        title="Clear search"
+                    >
+                        <X size={14} />
+                    </button>
+                )}
+                <div className="relative flex-grow">
+                    <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
+                        <Search size={14} className="text-gray-400" />
+                    </div>
+                    <input
+                        type="text"
+                        placeholder="Search VMs..."
+                        className="w-full pl-8 pr-2 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
+                    />
+                </div>
+            </div>
+            <div className="flex-grow overflow-y-auto">
+                {filteredNode ? (
+                    <InventoryTree
+                        node={filteredNode}
+                        onVmSelect={onVmSelect}
+                        currentlySelectedVm={currentlySelectedVm}
+                        forceOpen={!!searchQuery}
+                    />
+                ) : (
+                    <div className="text-center text-gray-500 text-sm py-8">No matching VMs found.</div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+const InventoryTree = ({ node, onVmSelect, currentlySelectedVm, level = 0, forceOpen = false }) => {
+    const [isOpen, setIsOpen] = useState(level < 2 || forceOpen);
     const isParent = node.children && node.children.length > 0;
+
+    useEffect(() => {
+        if (forceOpen) setIsOpen(true);
+    }, [forceOpen]);
 
     const handleNodeClick = () => {
         if (node.type === 'VirtualMachine' || node.type === 'disk') {
@@ -1133,6 +1209,7 @@ const InventoryTree = ({ node, onVmSelect, currentlySelectedVm, level = 0 }) => 
                             onVmSelect={onVmSelect}
                             currentlySelectedVm={currentlySelectedVm}
                             level={level + 1}
+                            forceOpen={forceOpen}
                         />
                     ))}
                 </div>
@@ -1692,11 +1769,13 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
 
                         {sourceType === 'vmware' && vcenterInventory && (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                                <div className="border border-gray-200 rounded-md p-2 h-96 overflow-y-auto bg-white">
-                                    <div className="flex justify-end">
+                                <div className="border border-gray-200 rounded-md p-2 h-96 flex flex-col overflow-hidden bg-white">
+                                    <div className="flex justify-end shrink-0 mb-1">
                                         <button onClick={() => handleSourceChange(selectedSource)} className="text-blue-500 hover:text-blue-700"><RefreshCw size={16} /></button>
                                     </div>
-                                    <InventoryTree node={vcenterInventory} onVmSelect={setSelectedVm} currentlySelectedVm={selectedVm} />
+                                    <div className="flex-grow overflow-hidden">
+                                        <FilterableInventoryTree node={vcenterInventory} onVmSelect={setSelectedVm} currentlySelectedVm={selectedVm} />
+                                    </div>
                                 </div>
                                 <VmDetailsPanel vm={selectedVm} />
                             </div>
@@ -2052,7 +2131,7 @@ const AboutPage = () => (
             <style>{`.github-corner:hover .octo-arm{animation:octocat-wave 560ms ease-in-out}@keyframes octocat-wave{0%,100%{transform:rotate(0)}20%,60%{transform:rotate(-25deg)}40%,80%{transform:rotate(10deg)}}@media (max-width:500px){.github-corner:hover .octo-arm{animation:none}.github-corner .octo-arm{animation:octocat-wave 560ms ease-in-out}}`}</style>
 
             <h2 className="text-xl font-semibold mb-4 z-10 relative">Harvester VM Import UI</h2>
-            <p className="mb-2 z-10 relative"><strong>Version:</strong> 1.6.0</p>
+            <p className="mb-2 z-10 relative"><strong>Version:</strong> 1.6.1</p>
             <p className="mb-2 z-10 relative">This UI provides a user-friendly interface for the Harvester VM Import Controller, allowing users to import virtual machines from a VMware vCenter into a Harvester cluster.</p>
             <p className="mb-6 italic text-sm text-gray-600 z-10 relative mt-2 border-l-4 border-blue-400 pl-3">Based off of an idea by Erico Mendonca (erico.mendonca@suse.com)</p>
 

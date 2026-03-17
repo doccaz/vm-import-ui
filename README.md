@@ -18,7 +18,7 @@ This add-on provides a user-friendly web interface for the Harvester VM Import C
     * Toggle between full controller logs or **filtered logs** relevant to your specific plan.
 * **Management**: Monitor progress, view YAML, and delete plans with safety confirmations.
 
-# Latest Release (v1.6.0)
+# Latest Release (v1.6.1)
 The latest version includes enhanced UI spacing, Kubernetes-compliant plan name validation, and more robust VM metadata tracking.
 
 
