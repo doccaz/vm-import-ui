@@ -2,6 +2,7 @@
 package main
 
 import (
+	"mime"
 	"net/http"
 	"os"
 
@@ -10,6 +11,14 @@ import (
 )
 
 func main() {
+	// Fix MIME types for serving static files
+	mime.AddExtensionType(".js", "application/javascript")
+	mime.AddExtensionType(".css", "text/css")
+	mime.AddExtensionType(".html", "text/html")
+	mime.AddExtensionType(".json", "application/json")
+	mime.AddExtensionType(".svg", "image/svg+xml")
+	mime.AddExtensionType(".ico", "image/x-icon")
+
 	log.SetFormatter(&log.JSONFormatter{})
 
 	logLevel, err := log.ParseLevel(os.Getenv("LOG_LEVEL"))
