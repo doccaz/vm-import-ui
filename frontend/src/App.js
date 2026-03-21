@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Plus, ChevronRight, Server, Folder, Cloud, HardDrive, ArrowRight, X, Loader, CheckCircle, Cpu, MemoryStick, Trash2, Edit, AlertTriangle, RefreshCw, List, Package, Info, ChevronUp, ChevronDown, Search, Play, Square, RotateCcw, Power, CheckCircle2, HelpCircle, XCircle, Network, Check } from 'lucide-react';
+import { Plus, ChevronRight, Server, Folder, Cloud, HardDrive, ArrowRight, X, Loader, CheckCircle, Cpu, MemoryStick, Trash2, Edit, AlertTriangle, RefreshCw, List, Package, Info, ChevronUp, ChevronDown, Search, Play, Square, RotateCcw, Power, CheckCircle2, HelpCircle, XCircle, Network, Check, Sun, Moon, Palette, ExternalLink } from 'lucide-react';
 
 // --- Helper Functions ---
 const formatBytes = (bytes, decimals = 2) => {
@@ -37,14 +37,14 @@ const SortableHeader = ({ label, sortKey, currentSort, onSort }) => {
     const isActive = currentSort.key === sortKey;
     return (
         <th
-            className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
+            className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider cursor-pointer hover:bg-app transition-colors"
             onClick={() => onSort(sortKey)}
         >
             <div className="flex items-center space-x-1">
                 <span>{label}</span>
                 <div className="flex flex-col">
-                    <ChevronUp size={12} className={`${isActive && currentSort.direction === 'asc' ? 'text-blue-600' : 'text-gray-300'}`} />
-                    <ChevronDown size={12} className={`${isActive && currentSort.direction === 'desc' ? 'text-blue-600' : 'text-gray-300'}`} />
+                    <ChevronUp size={12} className={`${isActive && currentSort.direction === 'asc' ? 'text-blue-600' : 'opacity-30'}`} />
+                    <ChevronDown size={12} className={`${isActive && currentSort.direction === 'desc' ? 'text-blue-600' : 'opacity-30'}`} />
                 </div>
             </div>
         </th>
@@ -53,8 +53,8 @@ const SortableHeader = ({ label, sortKey, currentSort, onSort }) => {
 
 // --- Components ---
 const Header = ({ title, onButtonClick }) => (
-    <div className="flex justify-between items-center mb-6 pb-4 border-b border-gray-200">
-        <h1 className="text-2xl font-semibold text-gray-800">{title}</h1>
+    <div className="flex justify-between items-center mb-6 pb-4 border-b border-main">
+        <h1 className="text-2xl font-semibold text-main">{title}</h1>
         {onButtonClick && (
             <button onClick={onButtonClick} className="flex items-center bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-md shadow">
                 <Plus size={20} className="mr-2" />
@@ -78,13 +78,13 @@ const ResourceTable = ({ plans, onViewDetails, onDelete, sortConfig, onSort, exp
     const renderStatusIcon = (status) => {
         if (status === 'True') return <CheckCircle2 size={14} className="text-green-500 mr-1" />;
         if (status === 'False') return <XCircle size={14} className="text-red-500 mr-1" />;
-        return <HelpCircle size={14} className="text-gray-400 mr-1" />;
+        return <HelpCircle size={14} className="text-secondary opacity-70 mr-1" />;
     };
 
     return (
-        <div className="bg-white shadow-md rounded-lg">
-            <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
+        <div className="bg-card shadow-md rounded-lg overflow-x-auto border border-main">
+            <table className="min-w-full divide-y divide-main">
+                <thead className="bg-app opacity-90">
                     <tr>
                         <th className="px-4 py-3"></th>
                         <SortableHeader label="Created" sortKey="metadata.creationTimestamp" currentSort={sortConfig} onSort={onSort} />
@@ -93,37 +93,37 @@ const ResourceTable = ({ plans, onViewDetails, onDelete, sortConfig, onSort, exp
                         <SortableHeader label="VM Name" sortKey="spec.virtualMachineName" currentSort={sortConfig} onSort={onSort} />
                         <SortableHeader label="Target Namespace" sortKey="metadata.namespace" currentSort={sortConfig} onSort={onSort} />
                         <SortableHeader label="Storage Class" sortKey="spec.storageClass" currentSort={sortConfig} onSort={onSort} />
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider"></th>
                     </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className="bg-card divide-y divide-main">
                     {plans.length === 0 ? (
                         <tr>
-                            <td colSpan="8" className="px-6 py-4 text-center text-sm text-gray-500">No migration plans found.</td>
+                            <td colSpan="8" className="px-6 py-4 text-center text-sm text-secondary">No migration plans found.</td>
                         </tr>
                     ) : (
                         plans.map(plan => (
                             <React.Fragment key={plan.metadata.uid}>
-                                <tr className="hover:bg-gray-50 transition-colors">
-                                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        <button onClick={() => toggleExpand(plan.metadata.uid)} className="p-1 hover:bg-gray-100 rounded-full transition-colors">
+                                <tr className="hover:bg-app transition-colors">
+                                    <td className="px-4 py-4 whitespace-nowrap text-sm text-secondary">
+                                        <button onClick={() => toggleExpand(plan.metadata.uid)} className="p-1 hover:bg-app rounded-full transition-colors">
                                             {expandedPlans.has(plan.metadata.uid) ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
                                         </button>
                                     </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(plan.metadata.creationTimestamp)}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{plan.metadata.name}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{getPlanStatus(plan)}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{plan.spec?.virtualMachineName || 'N/A'}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{plan.metadata.namespace}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{plan.spec.storageClass}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary">{formatDate(plan.metadata.creationTimestamp)}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-main">{plan.metadata.name}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary">{getPlanStatus(plan)}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary">{plan.spec?.virtualMachineName || 'N/A'}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary">{plan.metadata.namespace}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary">{plan.spec.storageClass}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2 pr-4">
-                                        <button onClick={() => { }} title="Edit" className="text-gray-600 hover:text-gray-800 cursor-not-allowed"><Edit size={18} /></button>
+                                        <button onClick={() => { }} title="Edit" className="text-secondary hover:text-main cursor-not-allowed"><Edit size={18} /></button>
                                         <button onClick={() => onDelete(plan)} title="Delete" className="text-red-600 hover:text-red-800"><Trash2 size={18} /></button>
                                         <button onClick={() => onViewDetails(plan)} className="text-blue-600 hover:text-blue-800">Details</button>
                                     </td>
                                 </tr>
                                 {expandedPlans.has(plan.metadata.uid) && (
-                                    <tr className="bg-gray-50">
+                                    <tr className="bg-app">
                                         <td colSpan="8" className="px-6 py-4">
                                             {(() => {
                                                 const cpu = plan.status?.cpu || plan.metadata.annotations?.['migration.harvesterhci.io/original-cpu'];
@@ -136,26 +136,26 @@ const ResourceTable = ({ plans, onViewDetails, onDelete, sortConfig, onSort, exp
                                                 const annotationTitle = "Data from original VM characteristics (vCenter source)";
 
                                                 return (cpu || mem || diskSizeGB) && (
-                                                    <div className="mb-4 flex flex-wrap gap-4 text-[11px] p-2 bg-blue-50/50 rounded-md border border-blue-100 items-center">
+                                                    <div className="mb-4 flex flex-wrap gap-4 text-[11px] p-2 bg-blue-500/10 rounded-md border border-blue-500/20 items-center">
                                                         <span className="font-bold text-blue-700 uppercase tracking-tight">Source Characteristics:</span>
                                                         <div className="flex items-center" title={!plan.status?.cpu && plan.metadata.annotations?.['migration.harvesterhci.io/original-cpu'] ? annotationTitle : undefined}>
-                                                            <Cpu size={12} className="mr-1 text-gray-400" />
+                                                            <Cpu size={12} className="mr-1 text-secondary opacity-70" />
                                                             <span>{cpu || 'N/A'} vCPU</span>
                                                             {!plan.status?.cpu && plan.metadata.annotations?.['migration.harvesterhci.io/original-cpu'] && <span className="ml-0.5 text-blue-500 cursor-help">*</span>}
                                                         </div>
                                                         <div className="flex items-center" title={!plan.status?.memoryMB && plan.metadata.annotations?.['migration.harvesterhci.io/original-memory-mb'] ? annotationTitle : undefined}>
-                                                            <MemoryStick size={12} className="mr-1 text-gray-400" />
+                                                            <MemoryStick size={12} className="mr-1 text-secondary opacity-70" />
                                                             <span>{mem ? formatBytes(parseInt(mem) * 1024 * 1024, 0) : 'N/A'}</span>
                                                             {!plan.status?.memoryMB && plan.metadata.annotations?.['migration.harvesterhci.io/original-memory-mb'] && <span className="ml-0.5 text-blue-500 cursor-help">*</span>}
                                                         </div>
                                                         <div className="flex items-center" title={!plan.status?.diskImportStatus && plan.metadata.annotations?.['migration.harvesterhci.io/original-disk-size-gb'] ? annotationTitle : undefined}>
-                                                            <HardDrive size={12} className="mr-1 text-gray-400" />
+                                                            <HardDrive size={12} className="mr-1 text-secondary opacity-70" />
                                                             <span>
                                                                 {diskSizeGB || 'N/A'} GB
                                                                 {(() => {
                                                                     const originalDiskGB = plan.metadata.annotations?.['migration.harvesterhci.io/original-disk-size-gb'];
                                                                     if (disks.length > 0 && originalDiskGB && originalDiskGB !== diskSizeGB) {
-                                                                        return <span className="text-gray-400 ml-1">({originalDiskGB} GB originally)</span>;
+                                                                        return <span className="text-secondary opacity-70 ml-1">({originalDiskGB} GB originally)</span>;
                                                                     }
                                                                     return null;
                                                                 })()}
@@ -167,29 +167,29 @@ const ResourceTable = ({ plans, onViewDetails, onDelete, sortConfig, onSort, exp
                                             })()}
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                 <div>
-                                                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Import Conditions</h4>
+                                                    <h4 className="text-xs font-bold text-secondary uppercase tracking-wider mb-2">Import Conditions</h4>
                                                     <div className="space-y-1 max-h-48 overflow-y-auto pr-2">
                                                         {(plan.status?.importConditions || plan.status?.conditions || []).map((c, i) => (
                                                             <div key={i} className="flex items-start text-sm border-b border-gray-50 last:border-0 pb-1">
                                                                 <span className="mt-0.5">{renderStatusIcon(c.status || c.Status)}</span>
                                                                 <div className="flex-grow">
                                                                     <div className="flex justify-between items-center">
-                                                                        <span className="font-medium text-gray-700">{c.type || c.Type}</span>
-                                                                        <span className="text-[10px] text-gray-400 font-mono">{formatDate(c.lastTransitionTime || c.lastUpdateTime || c.LastUpdateTime)}</span>
+                                                                        <span className="font-medium text-main">{c.type || c.Type}</span>
+                                                                        <span className="text-[10px] text-secondary opacity-70 font-mono">{formatDate(c.lastTransitionTime || c.lastUpdateTime || c.LastUpdateTime)}</span>
                                                                     </div>
-                                                                    <div className="text-gray-500 text-xs italic">{c.message || c.Message || (c.status === 'True' ? 'Step completed successfully' : '')}</div>
+                                                                    <div className="text-secondary text-xs italic">{c.message || c.Message || (c.status === 'True' ? 'Step completed successfully' : '')}</div>
                                                                 </div>
                                                             </div>
                                                         ))}
-                                                        {(!plan.status?.importConditions && (!plan.status?.conditions || plan.status.conditions.length === 0)) && <p className="text-xs text-gray-500 italic">No conditions reported yet.</p>}
+                                                        {(!plan.status?.importConditions && (!plan.status?.conditions || plan.status.conditions.length === 0)) && <p className="text-xs text-secondary italic">No conditions reported yet.</p>}
                                                     </div>
                                                 </div>
                                                 <div>
-                                                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Disk Import Status</h4>
+                                                    <h4 className="text-xs font-bold text-secondary uppercase tracking-wider mb-2">Disk Import Status</h4>
                                                     <div className="space-y-3">
                                                         {(() => {
                                                             const disks = plan.status?.diskImportStatus || plan.status?.diskStatus || plan.status?.planStatus?.disks || [];
-                                                            if (disks.length === 0) return <p className="text-xs text-gray-500 italic">No disk progress reported yet.</p>;
+                                                            if (disks.length === 0) return <p className="text-xs text-secondary italic">No disk progress reported yet.</p>;
 
                                                             const diskIndex = selectedDisks[plan.metadata.uid] || 0;
                                                             const d = disks[diskIndex] || disks[0];
@@ -198,9 +198,9 @@ const ResourceTable = ({ plans, onViewDetails, onDelete, sortConfig, onSort, exp
                                                                 <div className="space-y-4">
                                                                     {disks.length > 1 && (
                                                                         <div className="flex items-center space-x-2">
-                                                                            <label className="text-[10px] font-bold text-gray-400 uppercase">Select Disk:</label>
+                                                                            <label className="text-[10px] font-bold text-secondary opacity-70 uppercase">Select Disk:</label>
                                                                             <select
-                                                                                className="text-xs border rounded pl-1 pr-8 py-0.5 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 form-select"
+                                                                                className="text-xs border rounded pl-1 pr-8 py-0.5 bg-card focus:outline-none focus:ring-1 focus:ring-blue-500 form-select"
                                                                                 value={diskIndex}
                                                                                 onChange={(e) => setSelectedDisks(prev => ({ ...prev, [plan.metadata.uid]: parseInt(e.target.value, 10) }))}
                                                                             >
@@ -213,16 +213,16 @@ const ResourceTable = ({ plans, onViewDetails, onDelete, sortConfig, onSort, exp
                                                                         </div>
                                                                     )}
 
-                                                                    <div className="text-sm bg-white p-3 rounded border shadow-sm">
+                                                                    <div className="text-sm bg-card p-3 rounded border shadow-sm">
                                                                         <div className="flex justify-between items-start mb-1">
                                                                             <div className="flex flex-col truncate mr-2">
-                                                                                <span className="font-medium text-gray-700 truncate" title={d.diskName || d.name || d.Name}>{d.diskName || d.name || d.Name || `Disk ${diskIndex}`}</span>
-                                                                                <span className="text-[10px] text-gray-400 font-mono">Size: {formatBytes(d.diskSize || d.size || 0)}</span>
+                                                                                <span className="font-medium text-main truncate" title={d.diskName || d.name || d.Name}>{d.diskName || d.name || d.Name || `Disk ${diskIndex}`}</span>
+                                                                                <span className="text-[10px] text-secondary opacity-70 font-mono">Size: {formatBytes(d.diskSize || d.size || 0)}</span>
                                                                             </div>
                                                                         </div>
 
                                                                         <div className="mt-3 space-y-1.5 max-h-40 overflow-y-auto pr-1">
-                                                                            <h5 className="text-[10px] font-bold text-gray-400 uppercase tracking-tight">Disk Events</h5>
+                                                                            <h5 className="text-[10px] font-bold text-secondary opacity-70 uppercase tracking-tight">Disk Events</h5>
                                                                             {(() => {
                                                                                 const conditions = d.diskConditions || d.conditions || [];
                                                                                 return conditions.length > 0 ? (
@@ -231,15 +231,15 @@ const ResourceTable = ({ plans, onViewDetails, onDelete, sortConfig, onSort, exp
                                                                                             <span className="mt-0.5">{renderStatusIcon(c.status || c.Status)}</span>
                                                                                             <div className="flex-grow">
                                                                                                 <div className="flex justify-between items-center">
-                                                                                                    <span className="font-medium text-gray-700">{c.type || c.Type}</span>
-                                                                                                    <span className="text-[9px] text-gray-400 font-mono">{formatDate(c.lastTransitionTime || c.lastUpdateTime || c.LastUpdateTime)}</span>
+                                                                                                    <span className="font-medium text-main">{c.type || c.Type}</span>
+                                                                                                    <span className="text-[9px] text-secondary opacity-70 font-mono">{formatDate(c.lastTransitionTime || c.lastUpdateTime || c.LastUpdateTime)}</span>
                                                                                                 </div>
-                                                                                                <div className="text-gray-500 text-[10px] leading-tight">{c.message || c.Message || (c.status === 'True' || c.Status === 'True' ? 'Task completed' : '')}</div>
+                                                                                                <div className="text-secondary text-[10px] leading-tight">{c.message || c.Message || (c.status === 'True' || c.Status === 'True' ? 'Task completed' : '')}</div>
                                                                                             </div>
                                                                                         </div>
                                                                                     ))
                                                                                 ) : (
-                                                                                    <p className="text-[10px] text-gray-400 italic">{d.status || d.Status || 'Initialising...'}</p>
+                                                                                    <p className="text-[10px] text-secondary opacity-70 italic">{d.status || d.Status || 'Initialising...'}</p>
                                                                                 );
                                                                             })()}
                                                                         </div>
@@ -263,29 +263,29 @@ const ResourceTable = ({ plans, onViewDetails, onDelete, sortConfig, onSort, exp
 };
 
 const SourcesTable = ({ sources, onEdit, onDelete, onViewDetails, onExplore, sortConfig, onSort }) => (
-    <div className="bg-white shadow-md rounded-lg overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+    <div className="bg-card shadow-md rounded-lg overflow-x-auto border border-main">
+        <table className="min-w-full divide-y divide-main">
+            <thead className="bg-app opacity-90">
                 <tr>
                     <SortableHeader label="Created" sortKey="metadata.creationTimestamp" currentSort={sortConfig} onSort={onSort} />
                     <SortableHeader label="Name" sortKey="metadata.name" currentSort={sortConfig} onSort={onSort} />
                     <SortableHeader label="Namespace" sortKey="metadata.namespace" currentSort={sortConfig} onSort={onSort} />
                     <SortableHeader label="Endpoint" sortKey="spec.endpoint" currentSort={sortConfig} onSort={onSort} />
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider"></th>
                 </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-card divide-y divide-main">
                 {sources.length === 0 ? (
                     <tr>
-                        <td colSpan="5" className="px-6 py-4 text-center text-sm text-gray-500">No vCenter sources found.</td>
+                        <td colSpan="5" className="px-6 py-4 text-center text-sm text-secondary">No vCenter sources found.</td>
                     </tr>
                 ) : (
                     sources.map(source => (
-                        <tr key={source.metadata.uid} className="hover:bg-gray-50">
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(source.metadata.creationTimestamp)}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{source.metadata.name}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{source.metadata.namespace}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{source.spec.endpoint}</td>
+                        <tr key={source.metadata.uid} className="hover:bg-app">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary">{formatDate(source.metadata.creationTimestamp)}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-main">{source.metadata.name}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary">{source.metadata.namespace}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary">{source.spec.endpoint}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
                                 <button onClick={() => onExplore(source)} title="Explore Inventory" className="text-indigo-600 hover:text-indigo-800"><Search size={18} /></button>
                                 <button onClick={() => onEdit(source)} title="Edit" className="text-blue-600 hover:text-blue-800"><Edit size={18} /></button>
@@ -325,39 +325,39 @@ const SourceWizard = ({ onCancel, onSave, source }) => {
     };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 z-50">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-lg">
+        <div className="fixed inset-0 bg-opacity-50 flex justify-center items-center p-4 z-50">
+            <div className="bg-card rounded-lg shadow-xl w-full max-w-lg">
                 <div className="p-4 border-b">
                     <h2 className="text-xl font-semibold">{isEditMode ? 'Edit' : 'Create'} vCenter Source</h2>
                 </div>
                 <div className="p-6 space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">Name</label>
-                        <input type="text" value={name} onChange={e => setName(e.target.value)} disabled={isEditMode} className="mt-1 block w-full form-input disabled:bg-gray-200" />
+                        <label className="block text-sm font-medium text-main">Name</label>
+                        <input type="text" value={name} onChange={e => setName(e.target.value)} disabled={isEditMode} className="mt-1 block w-full form-input" />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">Namespace</label>
-                        <input type="text" value={namespace} onChange={e => setNamespace(e.target.value)} disabled={isEditMode} className="mt-1 block w-full form-input disabled:bg-gray-200" />
+                        <label className="block text-sm font-medium text-main">Namespace</label>
+                        <input type="text" value={namespace} onChange={e => setNamespace(e.target.value)} disabled={isEditMode} className="mt-1 block w-full form-input" />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">vCenter Endpoint URL</label>
+                        <label className="block text-sm font-medium text-main">vCenter Endpoint URL</label>
                         <input type="text" placeholder="https://vcenter.your-domain.com/sdk" value={endpoint} onChange={e => setEndpoint(e.target.value)} className="mt-1 block w-full form-input" />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">Datacenter Name</label>
+                        <label className="block text-sm font-medium text-main">Datacenter Name</label>
                         <input type="text" value={datacenter} onChange={e => setDatacenter(e.target.value)} className="mt-1 block w-full form-input" />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">Username</label>
+                        <label className="block text-sm font-medium text-main">Username</label>
                         <input type="text" value={username} onChange={e => setUsername(e.target.value)} className="mt-1 block w-full form-input" />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">Password</label>
+                        <label className="block text-sm font-medium text-main">Password</label>
                         <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="mt-1 block w-full form-input" placeholder={isEditMode ? "Leave blank to keep existing password" : ""} />
                     </div>
                 </div>
                 <div className="p-4 border-t flex justify-end space-x-2">
-                    <button onClick={onCancel} className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-md">Cancel</button>
+                    <button onClick={onCancel} className="btn-secondary">Cancel</button>
                     <button onClick={handleSubmit} className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-md">Save</button>
                 </div>
             </div>
@@ -393,18 +393,18 @@ const SourceDetails = ({ source, onClose }) => {
     };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 z-50">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 bg-opacity-50 flex justify-center items-center p-4 z-50">
+            <div className="bg-card rounded-lg shadow-xl w-full max-w-2xl flex flex-col max-h-[90vh]">
                 <div className="flex justify-between items-center p-4 border-b">
-                    <h2 className="text-xl font-semibold text-gray-800">{source.metadata.name}</h2>
+                    <h2 className="text-xl font-semibold text-main">{source.metadata.name}</h2>
                     <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-200">
                         <X size={20} />
                     </button>
                 </div>
                 <div className="p-6 space-y-6 overflow-y-auto">
                     <div>
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">Source Summary</h3>
-                        <div className="p-3 bg-gray-50 rounded-md border text-sm space-y-1">
+                        <h3 className="text-lg font-medium text-main mb-2">Source Summary</h3>
+                        <div className="p-3 bg-app rounded-md border text-sm space-y-1">
                             <p><strong>Endpoint:</strong> {source.spec.endpoint}</p>
                             <p><strong>Datacenter:</strong> {source.spec.dc}</p>
                             <p><strong>Credentials Secret:</strong> {source.spec.credentials.namespace}/{source.spec.credentials.name}</p>
@@ -421,8 +421,8 @@ const SourceDetails = ({ source, onClose }) => {
                         )}
                     </div>
                 </div>
-                <div className="p-4 border-t bg-gray-50 text-right rounded-b-lg">
-                    <button onClick={onClose} className="bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 px-4 rounded-md">Close</button>
+                <div className="p-4 border-t bg-app text-right rounded-b-lg">
+                    <button onClick={onClose} className="btn-secondary px-4 py-2 rounded-md font-semibold transition-colors">Close</button>
                 </div>
             </div>
         </div>
@@ -435,7 +435,7 @@ const getOvaSourceStatus = (source) => {
     const hasError = conditions.some(c => c.type === 'ClusterError' && c.status === 'True');
     const isReady = conditions.some(c => c.type === 'ClusterReady' && c.status === 'True');
 
-    let color = 'bg-gray-100 text-gray-700';
+    let color = 'bg-app text-main';
     let label = statusText;
     if (isReady) {
         color = 'bg-green-100 text-green-800';
@@ -454,30 +454,30 @@ const getOvaSourceStatus = (source) => {
 };
 
 const OvaSourcesTable = ({ sources, onEdit, onDelete, onViewDetails, sortConfig, onSort }) => (
-    <div className="bg-white shadow-md rounded-lg overflow-hidden">
-        <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+    <div className="bg-card shadow-md rounded-lg overflow-x-auto border border-main">
+        <table className="min-w-full divide-y divide-main">
+            <thead className="bg-app opacity-90">
                 <tr>
                     <SortableHeader label="Created" sortKey="metadata.creationTimestamp" currentSort={sortConfig} onSort={onSort} />
                     <SortableHeader label="Name" sortKey="metadata.name" currentSort={sortConfig} onSort={onSort} />
                     <SortableHeader label="Namespace" sortKey="metadata.namespace" currentSort={sortConfig} onSort={onSort} />
                     <SortableHeader label="URL" sortKey="spec.url" currentSort={sortConfig} onSort={onSort} />
                     <SortableHeader label="Status" sortKey="status.status" currentSort={sortConfig} onSort={onSort} />
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-secondary uppercase tracking-wider"></th>
                 </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-card divide-y divide-main">
                 {sources.length === 0 ? (
                     <tr>
-                        <td colSpan="6" className="px-6 py-4 text-center text-sm text-gray-500">No OVA sources found.</td>
+                        <td colSpan="6" className="px-6 py-4 text-center text-sm text-secondary">No OVA sources found.</td>
                     </tr>
                 ) : (
                     sources.map(source => (
-                        <tr key={source.metadata.uid} className="hover:bg-gray-50">
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{formatDate(source.metadata.creationTimestamp)}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{source.metadata.name}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{source.metadata.namespace}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 max-w-xs truncate" title={source.spec.url}>{source.spec.url}</td>
+                        <tr key={source.metadata.uid} className="hover:bg-app">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary">{formatDate(source.metadata.creationTimestamp)}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-main">{source.metadata.name}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary">{source.metadata.namespace}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary max-w-xs truncate" title={source.spec.url}>{source.spec.url}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm">
                                 {(() => {
                                     const { label, color } = getOvaSourceStatus(source);
@@ -529,39 +529,39 @@ const OvaSourceWizard = ({ onCancel, onSave, source }) => {
     };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 z-50">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-lg">
+        <div className="fixed inset-0 bg-opacity-50 flex justify-center items-center p-4 z-50">
+            <div className="bg-card rounded-lg shadow-xl w-full max-w-lg">
                 <div className="p-4 border-b">
                     <h2 className="text-xl font-semibold">{isEditMode ? 'Edit' : 'Create'} OVA Source</h2>
                 </div>
                 <div className="p-6 space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">Name</label>
-                        <input type="text" value={name} onChange={e => setName(e.target.value)} disabled={isEditMode} className="mt-1 block w-full form-input disabled:bg-gray-200" />
+                        <label className="block text-sm font-medium text-main">Name</label>
+                        <input type="text" value={name} onChange={e => setName(e.target.value)} disabled={isEditMode} className="mt-1 block w-full form-input" />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">Namespace</label>
-                        <input type="text" value={namespace} onChange={e => setNamespace(e.target.value)} disabled={isEditMode} className="mt-1 block w-full form-input disabled:bg-gray-200" />
+                        <label className="block text-sm font-medium text-main">Namespace</label>
+                        <input type="text" value={namespace} onChange={e => setNamespace(e.target.value)} disabled={isEditMode} className="mt-1 block w-full form-input" />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">OVA File URL</label>
+                        <label className="block text-sm font-medium text-main">OVA File URL</label>
                         <input type="text" placeholder="http://192.168.0.1:8080/example.ova" value={url} onChange={e => setUrl(e.target.value)} className="mt-1 block w-full form-input" />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">HTTP Timeout (Seconds)</label>
+                        <label className="block text-sm font-medium text-main">HTTP Timeout (Seconds)</label>
                         <input type="number" placeholder="Optional. Default is 600" value={httpTimeoutSeconds} onChange={e => setHttpTimeoutSeconds(e.target.value)} className="mt-1 block w-full form-input" />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">Username</label>
+                        <label className="block text-sm font-medium text-main">Username</label>
                         <input type="text" value={username} onChange={e => setUsername(e.target.value)} className="mt-1 block w-full form-input" placeholder="Optional" />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">Password</label>
+                        <label className="block text-sm font-medium text-main">Password</label>
                         <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="mt-1 block w-full form-input" placeholder={isEditMode ? "Leave blank to keep existing password" : "Optional"} />
                     </div>
                 </div>
                 <div className="p-4 border-t flex justify-end space-x-2">
-                    <button onClick={onCancel} className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-md">Cancel</button>
+                    <button onClick={onCancel} className="btn-secondary">Cancel</button>
                     <button onClick={handleSubmit} className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-md">Save</button>
                 </div>
             </div>
@@ -597,18 +597,18 @@ const OvaSourceDetails = ({ source, onClose }) => {
     };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 z-50">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 bg-opacity-50 flex justify-center items-center p-4 z-50">
+            <div className="bg-card rounded-lg shadow-xl w-full max-w-2xl flex flex-col max-h-[90vh]">
                 <div className="flex justify-between items-center p-4 border-b">
-                    <h2 className="text-xl font-semibold text-gray-800">{source.metadata.name}</h2>
+                    <h2 className="text-xl font-semibold text-main">{source.metadata.name}</h2>
                     <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-200">
                         <X size={20} />
                     </button>
                 </div>
                 <div className="p-6 space-y-6 overflow-y-auto">
                     <div>
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">Source Summary</h3>
-                        <div className="p-3 bg-gray-50 rounded-md border text-sm space-y-1">
+                        <h3 className="text-lg font-medium text-main mb-2">Source Summary</h3>
+                        <div className="p-3 bg-app rounded-md border text-sm space-y-1">
                             <p><strong>URL:</strong> {source.spec.url}</p>
                             <p><strong>HTTP Timeout:</strong> {source.spec.httpTimeoutSeconds || '600'}s</p>
                             <p><strong>Credentials Secret:</strong> {source.spec.credentials.namespace}/{source.spec.credentials.name}</p>
@@ -625,8 +625,8 @@ const OvaSourceDetails = ({ source, onClose }) => {
                         )}
                     </div>
                 </div>
-                <div className="p-4 border-t bg-gray-50 text-right rounded-b-lg">
-                    <button onClick={onClose} className="bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 px-4 rounded-md">Close</button>
+                <div className="p-4 border-t bg-app text-right rounded-b-lg">
+                    <button onClick={onClose} className="btn-secondary px-4 py-2 rounded-md font-semibold transition-colors">Close</button>
                 </div>
             </div>
         </div>
@@ -699,10 +699,10 @@ const PlanDetails = ({ plan, onClose }) => {
     };
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 z-50">
-            <div className="bg-white rounded-lg shadow-xl w-[768px] max-w-[95vw] min-h-[50vh] flex flex-col max-h-[95vh] resize overflow-hidden">
+        <div className="fixed inset-0 bg-opacity-50 flex justify-center items-center p-4 z-50">
+            <div className="bg-card rounded-lg shadow-xl w-[768px] max-w-[95vw] min-h-[50vh] flex flex-col max-h-[95vh] resize overflow-hidden">
                 <div className="flex justify-between items-center p-4 border-b">
-                    <h2 className="text-xl font-semibold text-gray-800">{plan.metadata.name}</h2>
+                    <h2 className="text-xl font-semibold text-main">{plan.metadata.name}</h2>
                     <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-200">
                         <X size={20} />
                     </button>
@@ -710,8 +710,8 @@ const PlanDetails = ({ plan, onClose }) => {
                 <div className="p-6 space-y-6 overflow-y-auto">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
-                            <h3 className="text-lg font-medium text-gray-900 mb-2">VM Characteristics</h3>
-                            <div className="p-3 bg-gray-50 rounded-md border text-sm space-y-2">
+                            <h3 className="text-lg font-medium text-main mb-2">VM Characteristics</h3>
+                            <div className="p-3 bg-app rounded-md border text-sm space-y-2">
                                 {(() => {
                                     const getAnnotation = (key) => plan.metadata.annotations?.[key];
                                     const originalCpu = getAnnotation('migration.harvesterhci.io/original-cpu');
@@ -729,11 +729,11 @@ const PlanDetails = ({ plan, onClose }) => {
                                     return (
                                         <>
                                             <div className="flex items-center">
-                                                <Cpu size={16} className="mr-2 text-gray-600" />
+                                                <Cpu size={16} className="mr-2 text-secondary" />
                                                 <span>
                                                     {cpu || 'N/A'} vCPU(s)
                                                     {plan.status?.cpu && originalCpu && originalCpu !== cpu && (
-                                                        <span className="text-gray-400 ml-1">({originalCpu} originally)</span>
+                                                        <span className="text-secondary opacity-70 ml-1">({originalCpu} originally)</span>
                                                     )}
                                                 </span>
                                                 {!plan.status?.cpu && originalCpu && (
@@ -741,11 +741,11 @@ const PlanDetails = ({ plan, onClose }) => {
                                                 )}
                                             </div>
                                             <div className="flex items-center">
-                                                <MemoryStick size={16} className="mr-2 text-gray-600" />
+                                                <MemoryStick size={16} className="mr-2 text-secondary" />
                                                 <span>
                                                     {memoryMB ? formatBytes(parseInt(memoryMB) * 1024 * 1024, 0) : 'N/A'} Memory
                                                     {plan.status?.memoryMB && originalMemoryMB && originalMemoryMB !== memoryMB && (
-                                                        <span className="text-gray-400 ml-1">({formatBytes(parseInt(originalMemoryMB) * 1024 * 1024, 0)} originally)</span>
+                                                        <span className="text-secondary opacity-70 ml-1">({formatBytes(parseInt(originalMemoryMB) * 1024 * 1024, 0)} originally)</span>
                                                     )}
                                                 </span>
                                                 {!plan.status?.memoryMB && originalMemoryMB && (
@@ -753,11 +753,11 @@ const PlanDetails = ({ plan, onClose }) => {
                                                 )}
                                             </div>
                                             <div className="flex items-center">
-                                                <HardDrive size={16} className="mr-2 text-gray-600" />
+                                                <HardDrive size={16} className="mr-2 text-secondary" />
                                                 <span>
                                                     {diskSizeGB || 'N/A'} GB Storage
                                                     {plan.status?.diskImportStatus && originalDiskGB && originalDiskGB !== diskSizeGB && (
-                                                        <span className="text-gray-400 ml-1">({originalDiskGB} GB originally)</span>
+                                                        <span className="text-secondary opacity-70 ml-1">({originalDiskGB} GB originally)</span>
                                                     )}
                                                 </span>
                                                 {!plan.status?.diskImportStatus && originalDiskGB && (
@@ -768,11 +768,11 @@ const PlanDetails = ({ plan, onClose }) => {
                                     );
                                 })()}
                                 <div className="flex items-center">
-                                    <Folder size={16} className="mr-2 text-gray-600" />
+                                    <Folder size={16} className="mr-2 text-secondary" />
                                     <span>{plan.spec?.folder || '/'}</span>
                                 </div>
                                 {plan.vms?.[0]?.networks?.[0]?.mac && (
-                                    <div className="flex items-center text-xs text-gray-500 pt-1 border-t">
+                                    <div className="flex items-center text-xs text-secondary pt-1 border-t">
                                         <Network size={14} className="mr-2" />
                                         <span className="font-mono">Source MAC: {plan.vms[0].networks[0].mac}</span>
                                     </div>
@@ -780,32 +780,32 @@ const PlanDetails = ({ plan, onClose }) => {
                             </div>
                         </div>
                         <div>
-                            <h3 className="text-lg font-medium text-gray-900 mb-2 font-sans border-b pb-1">Configuration Parameters</h3>
-                            <div className="p-3 bg-white rounded-md border shadow-sm text-xs space-y-2">
+                            <h3 className="text-lg font-medium text-main mb-2 font-sans border-b pb-1">Configuration Parameters</h3>
+                            <div className="p-3 bg-card rounded-md border shadow-sm text-xs space-y-2">
                                 <div className="grid grid-cols-2 gap-x-2 gap-y-1">
-                                    <span className="text-gray-500 font-medium">VM Name:</span>
-                                    <span className="text-gray-800 break-all font-semibold">{plan.spec?.virtualMachineName || 'N/A'}</span>
+                                    <span className="text-secondary font-medium">VM Name:</span>
+                                    <span className="text-main break-all font-semibold">{plan.spec?.virtualMachineName || 'N/A'}</span>
 
-                                    <span className="text-gray-500 font-medium">Source:</span>
-                                    <span className="text-gray-800 break-all">{plan.spec?.sourceCluster?.namespace}/{plan.spec?.sourceCluster?.name || 'N/A'}</span>
+                                    <span className="text-secondary font-medium">Source:</span>
+                                    <span className="text-main break-all">{plan.spec?.sourceCluster?.namespace}/{plan.spec?.sourceCluster?.name || 'N/A'}</span>
 
-                                    <span className="text-gray-500 font-medium">Storage Class:</span>
-                                    <span className="text-gray-800">{plan.spec?.storageClass || 'N/A'}</span>
+                                    <span className="text-secondary font-medium">Storage Class:</span>
+                                    <span className="text-main">{plan.spec?.storageClass || 'N/A'}</span>
 
-                                    <span className="text-gray-500 font-medium">Force Power Off:</span>
-                                    <span className={plan.spec?.forcePowerOff ? "text-orange-600 font-bold" : "text-gray-400"}>{plan.spec?.forcePowerOff ? "Yes" : "No"}</span>
+                                    <span className="text-secondary font-medium">Force Power Off:</span>
+                                    <span className={plan.spec?.forcePowerOff ? "text-orange-600 font-bold" : "text-secondary opacity-70"}>{plan.spec?.forcePowerOff ? "Yes" : "No"}</span>
 
-                                    <span className="text-gray-500 font-medium">Shutdown Timeout:</span>
-                                    <span className="text-gray-800">{plan.spec?.gracefulShutdownTimeoutSeconds || '0'}s</span>
+                                    <span className="text-secondary font-medium">Shutdown Timeout:</span>
+                                    <span className="text-main">{plan.spec?.gracefulShutdownTimeoutSeconds || '0'}s</span>
 
-                                    <span className="text-gray-500 font-medium">Skip Validation:</span>
-                                    <span className={plan.spec?.skipPreflightChecks ? "text-blue-600 font-bold" : "text-gray-400"}>{plan.spec?.skipPreflightChecks ? "Yes" : "No"}</span>
+                                    <span className="text-secondary font-medium">Skip Validation:</span>
+                                    <span className={plan.spec?.skipPreflightChecks ? "text-blue-600 font-bold" : "text-secondary opacity-70"}>{plan.spec?.skipPreflightChecks ? "Yes" : "No"}</span>
 
-                                    <span className="text-gray-500 font-medium">Default Disk Bus:</span>
-                                    <span className="text-gray-800">{plan.spec?.defaultDiskBusType || 'virtio'}</span>
+                                    <span className="text-secondary font-medium">Default Disk Bus:</span>
+                                    <span className="text-main">{plan.spec?.defaultDiskBusType || 'virtio'}</span>
 
-                                    <span className="text-gray-500 font-medium">Default Net Model:</span>
-                                    <span className="text-gray-800">{plan.spec?.defaultNetworkInterfaceModel || 'virtio'}</span>
+                                    <span className="text-secondary font-medium">Default Net Model:</span>
+                                    <span className="text-main">{plan.spec?.defaultNetworkInterfaceModel || 'virtio'}</span>
                                 </div>
                             </div>
                         </div>
@@ -813,44 +813,44 @@ const PlanDetails = ({ plan, onClose }) => {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
-                            <h3 className="text-lg font-medium text-gray-900 mb-2 font-sans border-b pb-1">Network Mappings</h3>
-                            <div className="bg-white border rounded-lg shadow-sm overflow-hidden text-[10px]">
-                                <table className="min-w-full divide-y divide-gray-200">
-                                    <thead className="bg-gray-50">
+                            <h3 className="text-lg font-medium text-main mb-2 font-sans border-b pb-1">Network Mappings</h3>
+                            <div className="bg-card border rounded-lg shadow-sm overflow-hidden text-[10px]">
+                                <table className="min-w-full divide-y divide-main">
+                                    <thead className="bg-app">
                                         <tr>
-                                            <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-tight">Source Net</th>
-                                            <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-tight">Target VLAN</th>
-                                            <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-tight">Model</th>
+                                            <th className="px-3 py-2 text-left font-bold text-secondary uppercase tracking-tight">Source Net</th>
+                                            <th className="px-3 py-2 text-left font-bold text-secondary uppercase tracking-tight">Target VLAN</th>
+                                            <th className="px-3 py-2 text-left font-bold text-secondary uppercase tracking-tight">Model</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-gray-200">
+                                    <tbody className="divide-y divide-main">
                                         {(plan.spec?.networkMapping || []).map((net, i) => (
-                                            <tr key={i} className="hover:bg-gray-50 transition-colors">
-                                                <td className="px-3 py-2 text-gray-700">{net.sourceNetwork}</td>
+                                            <tr key={i} className="hover:bg-app transition-colors">
+                                                <td className="px-3 py-2 text-main">{net.sourceNetwork}</td>
                                                 <td className="px-3 py-2 text-blue-600 font-medium">{net.destinationNetwork}</td>
-                                                <td className="px-3 py-2 text-gray-500 font-mono italic">{net.networkInterfaceModel || plan.spec?.defaultNetworkInterfaceModel || 'virtio'}</td>
+                                                <td className="px-3 py-2 text-secondary font-mono italic">{net.networkInterfaceModel || plan.spec?.defaultNetworkInterfaceModel || 'virtio'}</td>
                                             </tr>
                                         ))}
                                         {(!plan.spec?.networkMapping || plan.spec.networkMapping.length === 0) && (
-                                            <tr><td colSpan="3" className="px-3 py-4 text-center text-xs text-gray-500 italic">No network mappings defined.</td></tr>
+                                            <tr><td colSpan="3" className="px-3 py-4 text-center text-xs text-secondary italic">No network mappings defined.</td></tr>
                                         )}
                                     </tbody>
                                 </table>
                             </div>
                         </div>
                         <div>
-                            <h3 className="text-lg font-medium text-gray-900 mb-2 font-sans border-b pb-1">Disks</h3>
-                            <div className="bg-white border rounded-lg shadow-sm overflow-hidden text-[10px]">
-                                <table className="min-w-full divide-y divide-gray-200">
-                                    <thead className="bg-gray-50">
+                            <h3 className="text-lg font-medium text-main mb-2 font-sans border-b pb-1">Disks</h3>
+                            <div className="bg-card border rounded-lg shadow-sm overflow-hidden text-[10px]">
+                                <table className="min-w-full divide-y divide-main">
+                                    <thead className="bg-app">
                                         <tr>
-                                            <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-tight">Source Disk</th>
-                                            <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-tight">Size</th>
-                                            <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-tight">Storage Class</th>
-                                            <th className="px-3 py-2 text-left font-bold text-gray-500 uppercase tracking-tight">Bus</th>
+                                            <th className="px-3 py-2 text-left font-bold text-secondary uppercase tracking-tight">Source Disk</th>
+                                            <th className="px-3 py-2 text-left font-bold text-secondary uppercase tracking-tight">Size</th>
+                                            <th className="px-3 py-2 text-left font-bold text-secondary uppercase tracking-tight">Storage Class</th>
+                                            <th className="px-3 py-2 text-left font-bold text-secondary uppercase tracking-tight">Bus</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-gray-200">
+                                    <tbody className="divide-y divide-main">
                                         {(plan.status?.diskImportStatus || plan.spec?.disks || []).length > 0 ? (
                                             (plan.status?.diskImportStatus || plan.spec?.disks || []).map((disk, i) => {
                                                 const name = disk.diskName || disk.sourceDisk || (i === 0 ? "Root Disk" : `Disk ${i}`);
@@ -860,20 +860,20 @@ const PlanDetails = ({ plan, onClose }) => {
                                                 const bus = disk.busType || disk.bus || plan.spec?.defaultDiskBusType || 'virtio';
 
                                                 return (
-                                                    <tr key={i} className="hover:bg-gray-50 transition-colors">
-                                                        <td className="px-3 py-2 text-gray-700 truncate max-w-[120px]" title={name}>{name}</td>
-                                                        <td className="px-3 py-2 text-gray-700 font-medium">{size}</td>
-                                                        <td className="px-3 py-2 text-xs text-gray-700">{sc}</td>
-                                                        <td className="px-3 py-2 text-gray-500 font-mono italic uppercase">{bus}</td>
+                                                    <tr key={i} className="hover:bg-app transition-colors">
+                                                        <td className="px-3 py-2 text-main truncate max-w-[120px]" title={name}>{name}</td>
+                                                        <td className="px-3 py-2 text-main font-medium">{size}</td>
+                                                        <td className="px-3 py-2 text-xs text-main">{sc}</td>
+                                                        <td className="px-3 py-2 text-secondary font-mono italic uppercase">{bus}</td>
                                                     </tr>
                                                 );
                                             })
                                         ) : (
-                                            <tr className="hover:bg-gray-50 transition-colors">
-                                                <td className="px-3 py-2 text-gray-700 font-medium">Root Disk</td>
-                                                <td className="px-3 py-2 text-gray-700 font-medium">{plan.vms?.[0]?.diskSizeGB || 'N/A'} GB</td>
-                                                <td className="px-3 py-2 text-xs text-gray-700">{plan.spec?.storageClass || 'default'}</td>
-                                                <td className="px-3 py-2 text-gray-500 font-mono italic">{plan.spec?.defaultDiskBusType || 'virtio'}</td>
+                                            <tr className="hover:bg-app transition-colors">
+                                                <td className="px-3 py-2 text-main font-medium">Root Disk</td>
+                                                <td className="px-3 py-2 text-main font-medium">{plan.vms?.[0]?.diskSizeGB || 'N/A'} GB</td>
+                                                <td className="px-3 py-2 text-xs text-main">{plan.spec?.storageClass || 'default'}</td>
+                                                <td className="px-3 py-2 text-secondary font-mono italic">{plan.spec?.defaultDiskBusType || 'virtio'}</td>
                                             </tr>
                                         )}
                                     </tbody>
@@ -885,18 +885,18 @@ const PlanDetails = ({ plan, onClose }) => {
                         <div className="flex space-x-4 border-b">
                             <button
                                 onClick={() => handleShowDebug('logs')}
-                                className={`pb-2 text-sm font-medium transition-colors ${showDebug === 'logs' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+                                className={`pb-2 text-sm font-medium transition-colors ${showDebug === 'logs' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-secondary hover:text-main'}`}
                             >
                                 Debug Logs
                             </button>
                             {showDebug === 'logs' && (
                                 <div className="flex items-center space-x-4 ml-auto pb-2">
                                     <div className="flex items-center text-xs space-x-2">
-                                        <button onClick={() => setFontSize(Math.max(6, fontSize - 1))} className="text-gray-500 hover:text-gray-700 font-bold px-1.5 bg-gray-100 rounded border hover:bg-gray-200">-A</button>
-                                        <span className="text-gray-600 font-mono w-8 text-center">{fontSize}px</span>
-                                        <button onClick={() => setFontSize(Math.min(24, fontSize + 1))} className="text-gray-500 hover:text-gray-700 font-bold px-1.5 bg-gray-100 rounded border hover:bg-gray-200">+A</button>
+                                        <button onClick={() => setFontSize(Math.max(6, fontSize - 1))} className="text-secondary hover:text-main font-bold px-1.5 bg-app rounded border hover:bg-gray-200">-A</button>
+                                        <span className="text-secondary font-mono w-8 text-center">{fontSize}px</span>
+                                        <button onClick={() => setFontSize(Math.min(24, fontSize + 1))} className="text-secondary hover:text-main font-bold px-1.5 bg-app rounded border hover:bg-gray-200">+A</button>
                                     </div>
-                                    <label className="flex items-center text-xs text-gray-400 cursor-pointer">
+                                    <label className="flex items-center text-xs text-secondary opacity-70 cursor-pointer">
                                         <input
                                             type="checkbox"
                                             checked={followLogs}
@@ -905,7 +905,7 @@ const PlanDetails = ({ plan, onClose }) => {
                                         />
                                         Follow
                                     </label>
-                                    <label className="flex items-center text-xs text-gray-400 cursor-pointer">
+                                    <label className="flex items-center text-xs text-secondary opacity-70 cursor-pointer">
                                         <input
                                             type="checkbox"
                                             checked={onlyRelevantLogs}
@@ -922,7 +922,7 @@ const PlanDetails = ({ plan, onClose }) => {
                             )}
                             <button
                                 onClick={() => handleShowDebug('yaml')}
-                                className={`pb-2 text-sm font-medium transition-colors ${showDebug === 'yaml' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'} ${showDebug !== 'logs' ? 'ml-auto' : ''}`}
+                                className={`pb-2 text-sm font-medium transition-colors ${showDebug === 'yaml' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-secondary hover:text-main'} ${showDebug !== 'logs' ? 'ml-auto' : ''}`}
                             >
                                 View YAML
                             </button>
@@ -943,7 +943,7 @@ const PlanDetails = ({ plan, onClose }) => {
                                 {isLoadingDebug ? (
                                     <div className="flex items-center space-x-3 p-4">
                                         <Loader className="animate-spin text-blue-400" size={18} />
-                                        <span className="text-gray-400">Streaming {showDebug}...</span>
+                                        <span className="text-secondary opacity-70">Streaming {showDebug}...</span>
                                     </div>
                                 ) : (
                                     <>
@@ -955,8 +955,8 @@ const PlanDetails = ({ plan, onClose }) => {
                         )}
                     </div>
                 </div>
-                <div className="p-4 border-t bg-gray-50 text-right rounded-b-lg">
-                    <button onClick={onClose} className="bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 px-4 rounded-md">Close</button>
+                <div className="p-4 border-t bg-app text-right rounded-b-lg">
+                    <button onClick={onClose} className="btn-secondary px-4 py-2 rounded-md font-semibold transition-colors">Close</button>
                 </div>
             </div>
         </div>
@@ -1076,12 +1076,12 @@ const SourceExplorer = ({ source, onClose }) => {
     }, [source, fetchInventory]);
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 z-50">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 bg-opacity-50 flex justify-center items-center p-4 z-50">
+            <div className="bg-card rounded-lg shadow-xl w-full max-w-5xl flex flex-col max-h-[90vh]">
                 <div className="flex justify-between items-center p-4 border-b">
                     <div className="flex items-center space-x-4">
-                        <h2 className="text-xl font-semibold text-gray-800">Explore: {source.metadata.name}</h2>
-                        <button onClick={() => fetchInventory(true)} className="text-blue-500 hover:text-blue-700 p-1 rounded-full hover:bg-gray-100 transition-colors" title="Refresh Inventory">
+                        <h2 className="text-xl font-semibold text-main">Explore: {source.metadata.name}</h2>
+                        <button onClick={() => fetchInventory(true)} className="text-blue-500 hover:text-blue-700 p-1 rounded-full hover:bg-app transition-colors" title="Refresh Inventory">
                             <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
                         </button>
                     </div>
@@ -1093,18 +1093,18 @@ const SourceExplorer = ({ source, onClose }) => {
                     {isLoading && !inventory ? (
                         <div className="flex flex-col items-center justify-center flex-grow">
                             <Loader className="animate-spin text-blue-500 mb-2" size={32} />
-                            <p className="text-gray-600">Loading vCenter inventory...</p>
+                            <p className="text-secondary">Loading vCenter inventory...</p>
                         </div>
                     ) : error ? (
                         <div className="flex flex-col items-center justify-center flex-grow text-center">
                             <AlertTriangle className="text-red-500 mb-2" size={32} />
                             <p className="text-red-600 font-medium">Error loading inventory</p>
-                            <p className="text-gray-500 text-sm mt-1">{error}</p>
+                            <p className="text-secondary text-sm mt-1">{error}</p>
                             <button onClick={fetchInventory} className="mt-4 bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-md">Retry</button>
                         </div>
                     ) : (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full overflow-hidden">
-                            <div className="border border-gray-200 rounded-md p-2 flex flex-col overflow-hidden bg-white shadow-sm font-sans">
+                            <div className="border border-main rounded-md p-2 flex flex-col overflow-hidden bg-card shadow-sm font-sans">
                                 {inventory && <FilterableInventoryTree node={inventory} onVmSelect={setSelectedVm} currentlySelectedVm={selectedVm} />}
                             </div>
                             <div className="overflow-y-auto">
@@ -1119,9 +1119,9 @@ const SourceExplorer = ({ source, onClose }) => {
                         </div>
                     )}
                 </div>
-                <div className="p-4 border-t bg-gray-50 flex justify-between items-center rounded-b-lg">
-                    <p className="text-xs text-gray-500">Browsing data from {source.spec.endpoint}</p>
-                    <button onClick={onClose} className="bg-gray-600 hover:bg-gray-700 text-white font-semibold py-2 px-4 rounded-md shadow-sm transition-all active:scale-95">Close Explorer</button>
+                <div className="p-4 border-t bg-app flex justify-between items-center rounded-b-lg">
+                    <p className="text-xs text-secondary">Browsing data from {source.spec.endpoint}</p>
+                    <button onClick={onClose} className="btn-secondary px-4 py-2 rounded-md font-semibold transition-colors shadow-sm transition-all active:scale-95">Close Explorer</button>
                 </div>
             </div>
         </div>
@@ -1133,7 +1133,7 @@ const VmIcon = ({ type }) => {
         case 'datacenter': return <Cloud className="w-5 h-5 text-blue-500" />;
         case 'ClusterComputeResource': return <Server className="w-5 h-5 text-purple-500" />;
         case 'Folder': return <Folder className="w-5 h-5 text-yellow-600" />;
-        case 'VirtualMachine': return <HardDrive className="w-5 h-5 text-gray-600" />;
+        case 'VirtualMachine': return <HardDrive className="w-5 h-5 text-secondary" />;
         case 'disk': return <HardDrive className="w-4 h-4 text-blue-400" />;
         default: return null;
     }
@@ -1176,7 +1176,7 @@ const FilterableInventoryTree = ({ node, onVmSelect, currentlySelectedVm }) => {
                 {searchQuery && (
                     <button
                         onClick={() => setSearchQuery('')}
-                        className="mr-2 p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors focus:outline-none"
+                        className="mr-2 p-1 text-secondary opacity-70 hover:text-secondary hover:bg-app rounded-full transition-colors focus:outline-none"
                         title="Clear search"
                     >
                         <X size={14} />
@@ -1184,12 +1184,12 @@ const FilterableInventoryTree = ({ node, onVmSelect, currentlySelectedVm }) => {
                 )}
                 <div className="relative flex-grow">
                     <div className="absolute inset-y-0 left-0 pl-2 flex items-center pointer-events-none">
-                        <Search size={14} className="text-gray-400" />
+                        <Search size={14} className="text-secondary opacity-70" />
                     </div>
                     <input
                         type="text"
                         placeholder="Search VMs..."
-                        className="w-full pl-8 pr-2 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        className="w-full pl-8 pr-2 py-1.5 text-sm border border-main rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
                         value={searchQuery}
                         onChange={e => setSearchQuery(e.target.value)}
                     />
@@ -1204,7 +1204,7 @@ const FilterableInventoryTree = ({ node, onVmSelect, currentlySelectedVm }) => {
                         forceOpen={!!searchQuery}
                     />
                 ) : (
-                    <div className="text-center text-gray-500 text-sm py-8">No matching VMs found.</div>
+                    <div className="text-center text-secondary text-sm py-8">No matching VMs found.</div>
                 )}
             </div>
         </div>
@@ -1231,12 +1231,12 @@ const InventoryTree = ({ node, onVmSelect, currentlySelectedVm, level = 0, force
     return (
         <div style={{ paddingLeft: level > 0 ? '20px' : '0px' }}>
             <div
-                className={`flex items-center p-2 rounded-md cursor-pointer ${currentlySelectedVm?.name === node.name ? 'bg-blue-100' : 'hover:bg-gray-100'}`}
+                className={`flex items-center p-2 rounded-md cursor-pointer ${currentlySelectedVm?.name === node.name ? 'bg-blue-100' : 'hover:bg-app'}`}
                 onClick={handleNodeClick}
             >
                 {isParent && <ChevronRight size={16} className={`mr-1 transform transition-transform ${isOpen ? 'rotate-90' : ''}`} />}
                 <VmIcon type={node.type} />
-                <span className="ml-2 text-gray-800">{node.name}</span>
+                <span className="ml-2 text-main">{node.name}</span>
             </div>
             {isOpen && isParent && (
                 <div>
@@ -1272,7 +1272,7 @@ const VmDetailsPanel = ({ vm, onPowerOp, onRename, isOperating, onMacUpdate }) =
 
     if (!vm) {
         return (
-            <div className="border border-gray-200 rounded-md p-6 bg-gray-50 flex flex-col items-center justify-center text-gray-400 h-96">
+            <div className="border border-main rounded-md p-6 bg-app flex flex-col items-center justify-center text-secondary opacity-70 h-96">
                 <Search size={48} className="mb-4 opacity-20" />
                 <p className="text-sm font-medium">Select an item from the tree to view details</p>
             </div>
@@ -1294,12 +1294,12 @@ const VmDetailsPanel = ({ vm, onPowerOp, onRename, isOperating, onMacUpdate }) =
             case 'poweredOn': return 'text-green-600';
             case 'poweredOff': return 'text-red-600';
             case 'suspended': return 'text-yellow-600';
-            default: return 'text-gray-600';
+            default: return 'text-secondary';
         }
     };
 
     return (
-        <div className="p-4 border rounded-md bg-gray-50 h-full flex flex-col">
+        <div className="p-4 border rounded-md bg-app h-full flex flex-col">
             <div className="flex justify-between items-center mb-4">
                 {isRenaming ? (
                     <div className="flex items-center space-x-2 w-full">
@@ -1315,8 +1315,8 @@ const VmDetailsPanel = ({ vm, onPowerOp, onRename, isOperating, onMacUpdate }) =
                     </div>
                 ) : (
                     <div className="flex items-center justify-between w-full">
-                        <h3 className="text-lg font-medium text-gray-900 truncate" title={vm.name}>{vm.name}</h3>
-                        <button onClick={() => setIsRenaming(true)} className="ml-2 text-gray-400 hover:text-blue-600 transition-colors" title="Rename VM">
+                        <h3 className="text-lg font-medium text-main truncate" title={vm.name}>{vm.name}</h3>
+                        <button onClick={() => setIsRenaming(true)} className="ml-2 text-secondary opacity-70 hover:text-blue-600 transition-colors" title="Rename VM">
                             <Edit size={16} />
                         </button>
                     </div>
@@ -1326,36 +1326,36 @@ const VmDetailsPanel = ({ vm, onPowerOp, onRename, isOperating, onMacUpdate }) =
             <div className="space-y-3 text-sm flex-grow">
                 {isVm && (
                     <>
-                        <div className="flex items-center justify-between p-2 bg-white rounded border">
-                            <span className="text-gray-600 font-medium">Power State:</span>
+                        <div className="flex items-center justify-between p-2 bg-card rounded border">
+                            <span className="text-secondary font-medium">Power State:</span>
                             <span className={`font-bold ${getPowerStateColor(vm.powerState)}`}>{vm.powerState}</span>
                         </div>
 
                         <div className="flex items-center">
-                            <Cpu size={16} className="mr-2 text-gray-600" />
+                            <Cpu size={16} className="mr-2 text-secondary" />
                             <span>{vm.cpu || '0'} vCPU(s)</span>
                         </div>
                         <div className="flex items-center">
-                            <MemoryStick size={16} className="mr-2 text-gray-600" />
+                            <MemoryStick size={16} className="mr-2 text-secondary" />
                             <span>{formatBytes((vm.memoryMB || 0) * 1024 * 1024, 0)} Memory</span>
                         </div>
                         <div className="flex items-center">
-                            <HardDrive size={16} className="mr-2 text-gray-600" />
+                            <HardDrive size={16} className="mr-2 text-secondary" />
                             <span>{vm.diskSizeGB || '0'} GB Storage (Committed)</span>
                         </div>
                         <div className="flex items-center">
-                            <Folder size={16} className="mr-2 text-gray-600" />
+                            <Folder size={16} className="mr-2 text-secondary" />
                             <span className="truncate" title={vm.folder || '/'}>{vm.folder || '/'}</span>
                         </div>
                         <div>
-                            <h4 className="font-medium text-gray-800 mt-4 mb-1 border-b pb-1">Networks</h4>
+                            <h4 className="font-medium text-main mt-4 mb-1 border-b pb-1">Networks</h4>
                             <div className="space-y-2 mt-2">
                                 {(vm.networks || []).map((net, i) => (
-                                    <div key={i} className="flex flex-col p-2 bg-white rounded border shadow-sm">
+                                    <div key={i} className="flex flex-col p-2 bg-card rounded border shadow-sm">
                                         <div className="flex justify-between items-center">
                                             <div className="flex items-center space-x-2 truncate">
                                                 <Network size={14} className="text-blue-500 shrink-0" />
-                                                <span className="text-gray-700 truncate font-medium">{net.name || net}</span>
+                                                <span className="text-main truncate font-medium">{net.name || net}</span>
                                             </div>
                                             <div className="flex items-center space-x-2">
                                                 {editingMacKey === net.key ? (
@@ -1389,14 +1389,14 @@ const VmDetailsPanel = ({ vm, onPowerOp, onRename, isOperating, onMacUpdate }) =
                                                     </div>
                                                 ) : (
                                                     <div className="flex items-center space-x-1 group/mac">
-                                                        <span className="text-[10px] font-mono text-gray-500">{net.mac || 'No MAC'}</span>
+                                                        <span className="text-[10px] font-mono text-secondary">{net.mac || 'No MAC'}</span>
                                                         {net.mac && (
                                                             <button
                                                                 onClick={() => {
                                                                     setEditingMacKey(net.key);
                                                                     setNewMac(net.mac);
                                                                 }}
-                                                                className="text-gray-400 hover:text-blue-600 p-0.5 opacity-0 group-hover/mac:opacity-100 transition-opacity"
+                                                                className="text-secondary opacity-70 hover:text-blue-600 p-0.5 opacity-0 group-hover/mac:opacity-100 transition-opacity"
                                                                 title="Edit MAC Address"
                                                             >
                                                                 <Edit size={12} />
@@ -1408,53 +1408,53 @@ const VmDetailsPanel = ({ vm, onPowerOp, onRename, isOperating, onMacUpdate }) =
                                         </div>
                                     </div>
                                 ))}
-                                {(!vm.networks || vm.networks.length === 0) && <p className="text-xs text-gray-400 italic">No network interfaces.</p>}
+                                {(!vm.networks || vm.networks.length === 0) && <p className="text-xs text-secondary opacity-70 italic">No network interfaces.</p>}
                             </div>
                         </div>
                         <div>
-                            <h4 className="font-medium text-gray-800 mt-4 mb-1 border-b pb-1">Individual Disks</h4>
+                            <h4 className="font-medium text-main mt-4 mb-1 border-b pb-1">Individual Disks</h4>
                             <div className="space-y-2 mt-2">
                                 {(vm.disks || []).map((disk, i) => (
-                                    <div key={i} className="flex flex-col p-2 bg-white rounded border shadow-sm">
-                                        <div className="flex justify-between items-center bg-gray-50 -m-2 mb-2 px-2 py-1 rounded-t border-b overflow-hidden">
-                                            <span className="font-bold text-gray-700 truncate text-[10px]">{disk.name}</span>
+                                    <div key={i} className="flex flex-col p-2 bg-card rounded border shadow-sm">
+                                        <div className="flex justify-between items-center bg-app -m-2 mb-2 px-2 py-1 rounded-t border-b overflow-hidden">
+                                            <span className="font-bold text-main truncate text-[10px]">{disk.name}</span>
                                             <span className="text-[10px] font-mono text-blue-600">{disk.busType}</span>
                                         </div>
                                         <div className="flex justify-between items-center text-xs">
-                                            <span className="text-gray-600">{formatBytes(disk.capacity)}</span>
-                                            <span className="text-gray-400">Unit: {disk.unitNum}</span>
+                                            <span className="text-secondary">{formatBytes(disk.capacity)}</span>
+                                            <span className="text-secondary opacity-70">Unit: {disk.unitNum}</span>
                                         </div>
                                     </div>
                                 ))}
-                                {(!vm.disks || vm.disks.length === 0) && <p className="text-xs text-gray-400 italic">No detailed disk info available.</p>}
+                                {(!vm.disks || vm.disks.length === 0) && <p className="text-xs text-secondary opacity-70 italic">No detailed disk info available.</p>}
                             </div>
                         </div>
                     </>
                 )}
                 {isDisk && (
-                    <div className="p-4 bg-white rounded-lg border shadow-sm space-y-4">
+                    <div className="p-4 bg-card rounded-lg border shadow-sm space-y-4">
                         <div className="flex items-center space-x-3 text-blue-600">
                             <HardDrive size={24} />
                             <h4 className="text-lg font-semibold">Disk Selection</h4>
                         </div>
                         <div className="space-y-2">
                             <div className="flex justify-between text-sm">
-                                <span className="text-gray-500 font-medium">Node:</span>
-                                <span className="text-gray-900 font-bold">{vm.name}</span>
+                                <span className="text-secondary font-medium">Node:</span>
+                                <span className="text-main font-bold">{vm.name}</span>
                             </div>
-                            <p className="text-xs text-gray-500 italic">This is a virtual disk component of the parent VM. Select the VM node itself to perform power operations.</p>
+                            <p className="text-xs text-secondary italic">This is a virtual disk component of the parent VM. Select the VM node itself to perform power operations.</p>
                         </div>
                     </div>
                 )}
             </div>
 
             <div className="mt-6 pt-4 border-t">
-                <h4 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wider">VM Operations</h4>
+                <h4 className="text-sm font-semibold text-main mb-3 uppercase tracking-wider">VM Operations</h4>
                 <div className="grid grid-cols-2 gap-2">
                     <button
                         onClick={() => onPowerOp('on')}
                         disabled={isOperating || vm.powerState === 'poweredOn'}
-                        className="flex items-center justify-center px-3 py-2 bg-white border border-green-200 text-green-700 rounded-md hover:bg-green-50 disabled:opacity-50 disabled:bg-gray-50 transition-colors"
+                        className="flex items-center justify-center px-3 py-2 bg-card border border-green-200 text-green-700 rounded-md hover:bg-green-50 disabled:opacity-50 disabled:bg-app transition-colors"
                         title="Power On"
                     >
                         <Play size={16} className="mr-2" /> Power On
@@ -1462,7 +1462,7 @@ const VmDetailsPanel = ({ vm, onPowerOp, onRename, isOperating, onMacUpdate }) =
                     <button
                         onClick={() => onPowerOp('shutdown')}
                         disabled={isOperating || vm.powerState === 'poweredOff'}
-                        className="flex items-center justify-center px-3 py-2 bg-white border border-red-200 text-red-700 rounded-md hover:bg-red-50 disabled:opacity-50 disabled:bg-gray-50 transition-colors"
+                        className="flex items-center justify-center px-3 py-2 bg-card border border-red-200 text-red-700 rounded-md hover:bg-red-50 disabled:opacity-50 disabled:bg-app transition-colors"
                         title="Guest Shutdown"
                     >
                         <Power size={16} className="mr-2" /> Shutdown
@@ -1470,7 +1470,7 @@ const VmDetailsPanel = ({ vm, onPowerOp, onRename, isOperating, onMacUpdate }) =
                     <button
                         onClick={() => onPowerOp('off')}
                         disabled={isOperating || vm.powerState === 'poweredOff'}
-                        className="flex items-center justify-center px-3 py-2 bg-white border border-red-200 text-red-700 rounded-md hover:bg-red-50 disabled:opacity-50 disabled:bg-gray-50 transition-colors"
+                        className="flex items-center justify-center px-3 py-2 bg-card border border-red-200 text-red-700 rounded-md hover:bg-red-50 disabled:opacity-50 disabled:bg-app transition-colors"
                         title="Power Off (Immediate)"
                     >
                         <Square size={16} className="mr-2 text-red-600" /> Power Off
@@ -1478,7 +1478,7 @@ const VmDetailsPanel = ({ vm, onPowerOp, onRename, isOperating, onMacUpdate }) =
                     <button
                         onClick={() => onPowerOp('reset')}
                         disabled={isOperating || vm.powerState === 'poweredOff'}
-                        className="flex items-center justify-center px-3 py-2 bg-white border border-yellow-200 text-yellow-700 rounded-md hover:bg-yellow-50 disabled:opacity-50 disabled:bg-gray-50 transition-colors"
+                        className="flex items-center justify-center px-3 py-2 bg-card border border-yellow-200 text-yellow-700 rounded-md hover:bg-yellow-50 disabled:opacity-50 disabled:bg-app transition-colors"
                         title="Reset"
                     >
                         <RotateCcw size={16} className="mr-2" /> Reset
@@ -1748,10 +1748,10 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
             case 1:
                 return (
                     <div className="space-y-4">
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">Select Source & VM</h3>
+                        <h3 className="text-lg font-medium text-main mb-2">Select Source & VM</h3>
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Plan Name</label>
+                            <label className="block text-sm font-medium text-main">Plan Name</label>
                             <input type="text" value={planName} onChange={e => setPlanName(e.target.value)} className="mt-1 block w-full form-input" />
                         </div>
 
@@ -1767,9 +1767,9 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
                         </div>
 
                         {sourceType === 'vmware' ? (
-                            <div className="space-y-4 p-4 border rounded-md bg-gray-50">
+                            <div className="space-y-4 p-4 border rounded-md bg-app">
                                 <div className="flex items-center">
-                                    <label className="block text-sm font-medium text-gray-700 flex-grow">vCenter Source</label>
+                                    <label className="block text-sm font-medium text-main flex-grow">vCenter Source</label>
                                     <button onClick={fetchSources} className="ml-2 text-blue-500 hover:text-blue-700"><RefreshCw size={16} /></button>
                                 </div>
                                 <select value={selectedSource} onChange={e => handleSourceChange(e.target.value)} className="mt-1 block w-full form-select">
@@ -1782,9 +1782,9 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
                                 </select>
                             </div>
                         ) : (
-                            <div className="space-y-4 p-4 border rounded-md bg-gray-50">
+                            <div className="space-y-4 p-4 border rounded-md bg-app">
                                 <div className="flex items-center">
-                                    <label className="block text-sm font-medium text-gray-700 flex-grow">OVA Source</label>
+                                    <label className="block text-sm font-medium text-main flex-grow">OVA Source</label>
                                     <button onClick={fetchOvaSources} className="ml-2 text-blue-500 hover:text-blue-700"><RefreshCw size={16} /></button>
                                 </div>
                                 <select value={selectedSource} onChange={e => handleSourceChange(e.target.value)} className="mt-1 block w-full form-select">
@@ -1796,7 +1796,7 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
                                     ))}
                                 </select>
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700">Target VM Name</label>
+                                    <label className="block text-sm font-medium text-main">Target VM Name</label>
                                     <input type="text" placeholder="e.g. My-Imported-OVA" value={ovaVmName} onChange={e => setOvaVmName(e.target.value)} className="mt-1 block w-full form-input" />
                                 </div>
                             </div>
@@ -1807,7 +1807,7 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
 
                         {sourceType === 'vmware' && vcenterInventory && (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                                <div className="border border-gray-200 rounded-md p-2 h-96 flex flex-col overflow-hidden bg-white">
+                                <div className="border border-main rounded-md p-2 h-96 flex flex-col overflow-hidden bg-card">
                                     <div className="flex justify-end shrink-0 mb-1">
                                         <button onClick={() => handleSourceChange(selectedSource)} className="text-blue-500 hover:text-blue-700"><RefreshCw size={16} /></button>
                                     </div>
@@ -1818,7 +1818,7 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
                                 <VmDetailsPanel vm={selectedVm} />
                             </div>
                         )}
-                        <p className="text-sm text-gray-600 mt-2">
+                        <p className="text-sm text-secondary mt-2">
                             {sourceType === 'ova' ? (ovaVmName && selectedSource ? '1 VM configured for import.' : 'Select source and enter VM name.') : (selectedVm ? '1 VM selected for migration.' : '0 VMs selected.')}
                         </p>
                     </div>
@@ -1827,10 +1827,10 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
                 return (
                     <div>
                         <div className="flex justify-between items-center">
-                            <h3 className="text-lg font-medium text-gray-900 mb-2">Configuration</h3>
+                            <h3 className="text-lg font-medium text-main mb-2">Configuration</h3>
                             <button onClick={() => { fetchNamespaces(); fetchStorageClasses(); }} className="text-blue-500 hover:text-blue-700"><RefreshCw size={16} /></button>
                         </div>
-                        <p className="text-sm text-gray-600 mb-4">Define the migration plan details and target resources.</p>
+                        <p className="text-sm text-secondary mb-4">Define the migration plan details and target resources.</p>
 
                         {/* WARNING BANNER if capabilities are missing */}
                         {(!capabilities.hasAdvancedPower && capabilities.harvesterVersion) && (
@@ -1848,7 +1848,7 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
 
                         <div className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700">Target Namespace</label>
+                                <label className="block text-sm font-medium text-main">Target Namespace</label>
                                 <select value={targetNamespace} onChange={e => setTargetNamespace(e.target.value)} className="mt-1 block w-full form-select">
                                     <option value="">Select a namespace</option>
                                     {namespaces.map(ns => <option key={ns} value={ns}>{ns}</option>)}
@@ -1866,7 +1866,7 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
                                 {vmNameConflict && <p className="text-sm text-red-600 mt-1">A VM with the name "{selectedVm.name}" already exists in this namespace. Please choose a different namespace.</p>}
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700">Target Storage Class</label>
+                                <label className="block text-sm font-medium text-main">Target Storage Class</label>
                                 <select value={storageClass} onChange={e => setStorageClass(e.target.value)} className="mt-1 block w-full form-select">
                                     <option value="">Select a Storage Class</option>
                                     {storageClasses.map(sc => <option key={sc} value={sc}>{sc}</option>)}
@@ -1877,19 +1877,19 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
                         {/* New Advanced Options Section */}
                         {capabilities.hasAdvancedPower && (
                             <div className="mt-6 border-t pt-4">
-                                <h4 className="text-md font-medium text-gray-900 mb-3">Advanced Options</h4>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-gray-50 p-4 rounded-md border">
+                                <h4 className="text-md font-medium text-main mb-3">Advanced Options</h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-app p-4 rounded-md border">
                                     <div className="flex items-center">
                                         <input
                                             id="forcePowerOff"
                                             type="checkbox"
                                             checked={forcePowerOff}
                                             onChange={e => setForcePowerOff(e.target.checked)}
-                                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-main rounded"
                                         />
-                                        <label htmlFor="forcePowerOff" className="ml-2 block text-sm text-gray-700">
+                                        <label htmlFor="forcePowerOff" className="ml-2 block text-sm text-main">
                                             Force Power Off Source VM
-                                            <p className="text-xs text-gray-500 mt-0.5">Required if VMware Tools is not installed.</p>
+                                            <p className="text-xs text-secondary mt-0.5">Required if VMware Tools is not installed.</p>
                                         </label>
                                     </div>
 
@@ -1900,16 +1900,16 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
                                             type="checkbox"
                                             checked={skipPreflight}
                                             onChange={e => setSkipPreflight(e.target.checked)}
-                                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-main rounded"
                                         />
-                                        <label htmlFor="skipPreflight" className="ml-2 block text-sm text-gray-700">
+                                        <label htmlFor="skipPreflight" className="ml-2 block text-sm text-main">
                                             Skip Preflight Checks
-                                            <p className="text-xs text-gray-500 mt-0.5">Bypass validation (use with caution).</p>
+                                            <p className="text-xs text-secondary mt-0.5">Bypass validation (use with caution).</p>
                                         </label>
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700">Graceful Shutdown Timeout (Seconds)</label>
+                                        <label className="block text-sm font-medium text-main">Graceful Shutdown Timeout (Seconds)</label>
                                         <input
                                             type="number"
                                             value={shutdownTimeout}
@@ -1920,7 +1920,7 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700">Default Network Interface Model</label>
+                                        <label className="block text-sm font-medium text-main">Default Network Interface Model</label>
                                         <select
                                             value={defaultModel}
                                             onChange={e => setDefaultModel(e.target.value)}
@@ -1938,7 +1938,7 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
 
                                     {/* NEW: Default Disk Bus Type */}
                                     <div className="md:col-span-2">
-                                        <label className="block text-sm font-medium text-gray-700">Default Disk Bus Type</label>
+                                        <label className="block text-sm font-medium text-main">Default Disk Bus Type</label>
                                         <select
                                             value={diskBus}
                                             onChange={e => setDiskBus(e.target.value)}
@@ -1950,7 +1950,7 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
                                             <option value="sata">sata</option>
                                             <option value="usb">usb</option>
                                         </select>
-                                        <p className="text-xs text-gray-500 mt-1">Specify bus type if automatic detection fails.</p>
+                                        <p className="text-xs text-secondary mt-1">Specify bus type if automatic detection fails.</p>
                                     </div>
                                 </div>
                             </div>
@@ -1961,21 +1961,21 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
                 return (
                     <div>
                         <div className="flex items-center">
-                            <h3 className="text-lg font-medium text-gray-900 mb-2 flex-grow">Network Mapping</h3>
+                            <h3 className="text-lg font-medium text-main mb-2 flex-grow">Network Mapping</h3>
                             <button onClick={fetchNetworks} className="ml-2 text-blue-500 hover:text-blue-700"><RefreshCw size={16} /></button>
                         </div>
-                        <p className="text-sm text-gray-600 mb-4">
+                        <p className="text-sm text-secondary mb-4">
                             {sourceType === 'ova'
                                 ? 'Select the target Harvester network for the imported VM.'
                                 : 'Map source networks to target Harvester networks.'}
                         </p>
                         {harvesterNetworks.length === 0 ? (
-                            <p className="text-sm text-gray-500">No VLANs defined in Harvester.</p>
+                            <p className="text-sm text-secondary">No VLANs defined in Harvester.</p>
                         ) : sourceType === 'ova' ? (
                             <div className="space-y-4">
                                 <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center border-b pb-4 mb-2">
                                     <div className="md:col-span-5">
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Target Harvester Network</label>
+                                        <label className="block text-sm font-medium text-main mb-1">Target Harvester Network</label>
                                         <select
                                             value={networkMappings['default'] || ''}
                                             onChange={e => setNetworkMappings(prev => ({ ...prev, 'default': e.target.value }))}
@@ -1988,10 +1988,10 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
 
                                     {capabilities.hasAdvancedPower && (
                                         <div className="md:col-span-4">
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Interface Model</label>
+                                            <label className="block text-sm font-medium text-main mb-1">Interface Model</label>
                                             <select
                                                 onChange={e => setNetworkModels(prev => ({ ...prev, 'default': e.target.value }))}
-                                                className="form-select w-full text-sm text-gray-600"
+                                                className="form-select w-full text-sm text-secondary"
                                                 title="Specific Interface Model"
                                             >
                                                 <option value="">Default Model</option>
@@ -2009,15 +2009,15 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
                         ) : (
                             <div className="space-y-4">
                                 {sourceNetworks.length === 0 ? (
-                                    <p className="text-sm text-gray-500 italic">No source networks found for the selected VM. You can proceed without network mapping.</p>
+                                    <p className="text-sm text-secondary italic">No source networks found for the selected VM. You can proceed without network mapping.</p>
                                 ) : sourceNetworks.map(net => (
                                     <div key={net} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center border-b pb-4 mb-2 last:border-0 last:pb-0">
-                                        <div className="md:col-span-4 font-mono text-sm text-gray-800 break-all flex items-center">
-                                            <div className="bg-gray-200 text-gray-600 px-2 py-1 rounded text-xs mr-2">Source</div>
+                                        <div className="md:col-span-4 font-mono text-sm text-main break-all flex items-center">
+                                            <div className="bg-app text-secondary px-2 py-1 rounded text-xs mr-2 border border-main">Source</div>
                                             {net}
                                         </div>
                                         <div className="md:col-span-1 text-center hidden md:block">
-                                            <ArrowRight className="mx-auto text-gray-400" />
+                                            <ArrowRight className="mx-auto text-secondary opacity-70" />
                                         </div>
                                         <div className="md:col-span-4">
                                             <select
@@ -2033,7 +2033,7 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
                                             <div className="md:col-span-3">
                                                 <select
                                                     onChange={e => setNetworkModels(prev => ({ ...prev, [net]: e.target.value }))}
-                                                    className="form-select w-full text-sm text-gray-600"
+                                                    className="form-select w-full text-sm text-secondary"
                                                     title="Specific Interface Model"
                                                 >
                                                     <option value="">Default Model</option>
@@ -2055,7 +2055,7 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
             case 4:
                 return (
                     <div>
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">Review Plan</h3>
+                        <h3 className="text-lg font-medium text-main mb-2">Review Plan</h3>
                         <div className="space-y-4 text-sm">
                             <div><strong>Plan Name:</strong> {planName}</div>
                             <div><strong>Destination VM Name:</strong> {sourceType === 'ova' ? ovaVmName : selectedVm?.name}</div>
@@ -2080,7 +2080,7 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
                             <div>
                                 <h4 className="font-medium mt-2">VM to Migrate:</h4>
                                 <ul className="list-disc list-inside pl-4">
-                                    <li>{sourceType === 'ova' ? ovaVmName : selectedVm?.name} {sourceType !== 'ova' && <span className="text-gray-500 text-xs">(Folder: {selectedVm?.folder || '/'})</span>}</li>
+                                    <li>{sourceType === 'ova' ? ovaVmName : selectedVm?.name} {sourceType !== 'ova' && <span className="text-secondary text-xs">(Folder: {selectedVm?.folder || '/'})</span>}</li>
                                 </ul>
                             </div>
                             <div>
@@ -2089,7 +2089,7 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
                                     {Object.entries(networkMappings).map(([key, value]) => (
                                         <li key={key}>
                                             {key} &rarr; {value}
-                                            {capabilities.hasAdvancedPower && networkModels[key] && <span className="text-xs text-gray-500 ml-2">[{networkModels[key]}]</span>}
+                                            {capabilities.hasAdvancedPower && networkModels[key] && <span className="text-xs text-secondary ml-2">[{networkModels[key]}]</span>}
                                         </li>
                                     ))}
                                 </ul>
@@ -2104,13 +2104,13 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
     return (
         <div>
             <Header title="Create Migration Plan" />
-            <div className="bg-white p-6 shadow-md rounded-lg">
+            <div className="bg-card p-6 shadow-md rounded-lg">
                 {renderStepContent()}
             </div>
             <div className="mt-6 flex justify-between">
-                <button onClick={onCancel} className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-md">Cancel</button>
+                <button onClick={onCancel} className="btn-secondary">Cancel</button>
                 <div>
-                    {step > 1 && <button onClick={() => setStep(s => s - 1)} className="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-2 px-4 rounded-md mr-2">Back</button>}
+                    {step > 1 && <button onClick={() => setStep(s => s - 1)} className="btn-secondary mr-2">Back</button>}
                     {step < 4 && (
                         <button
                             onClick={() => {
@@ -2145,20 +2145,63 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities }) => {
 };
 
 const AboutPage = () => (
-    <div>
+    <div className="space-y-8">
         <div className="flex justify-between items-center mb-6">
-            <h1 className="text-2xl font-bold text-gray-800">
+            <h1 className="text-2xl font-bold text-main">
                 About VM Import UI
             </h1>
-
-            <img
-                src="/logo-stacked-harvester.svg"
-                alt="Harvester Logo"
-                className="h-32 w-32"
-            />
         </div>
 
-        <div className="bg-white shadow-md rounded-lg p-6 relative overflow-hidden">
+        {/* Feature Cards Section */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+            {/* Harvester Card */}
+            <div className="bg-card text-main rounded-2xl p-8 flex flex-col items-center text-center shadow-xl border border-main">
+                <div className="mb-6 h-16 flex items-center justify-center">
+                    <img
+                        src="https://harvesterhci.io/img/logo_horizontal.svg"
+                        alt="Harvester"
+                        className="h-full"
+                    />
+                </div>
+                <h2 className="text-2xl font-bold mb-4">Harvester</h2>
+                <p className="text-secondary leading-relaxed mb-8 flex-grow">
+                    Harvester is a modern, open-source hyperconverged infrastructure (HCI) solution built on Kubernetes, KubeVirt, and Longhorn. It provides a familiar virtualization management interface on top of cloud-native technologies.
+                </p>
+                <a
+                    href="https://harvesterhci.io/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="bg-[#00af7e] hover:bg-[#00966c] text-white font-bold py-3 px-8 rounded-lg flex items-center transition-colors shadow-lg"
+                >
+                    Get Harvester <ExternalLink size={18} className="ml-2" />
+                </a>
+            </div>
+
+            {/* SUSE Virtualization Card */}
+            <div className="bg-[#0c322c] text-white rounded-2xl p-8 flex flex-col items-center text-center shadow-xl border border-[#1e4a3f]">
+                <div className="mb-6 h-12 flex items-center">
+                    <img
+                        src="https://d12w0ryu9hjsx8.cloudfront.net/shared-header/1.7/assets/SUSE_Logo.svg"
+                        alt="SUSE"
+                        className="h-full"
+                    />
+                </div>
+                <h2 className="text-2xl font-bold mb-4 text-white">SUSE Virtualization</h2>
+                <p className="text-[#00af7e] leading-relaxed mb-8 flex-grow font-medium">
+                    Harvester is the foundation for <strong className="text-white">SUSE Virtualization</strong>, an enterprise-grade platform offering world-class support, enhanced security, and seamless Rancher integration for mission-critical workloads.
+                </p>
+                <a
+                    href="https://www.suse.com/products/virtualization"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="bg-white hover:bg-gray-100 text-[#0c322c] font-bold py-3 px-8 rounded-lg flex items-center transition-colors shadow-lg"
+                >
+                    Learn More <ExternalLink size={18} className="ml-2" />
+                </a>
+            </div>
+        </div>
+
+        <div className="bg-card shadow-md rounded-lg p-6 relative overflow-hidden border border-main">
             <a href="https://github.com/doccaz/vm-import-ui" target="_blank" rel="noopener noreferrer" aria-label="View source on GitHub" className="fixed top-0 right-0 z-50">
                 <svg width="80" height="80" viewBox="0 0 250 250" style={{ fill: '#151513', color: '#fff', position: 'absolute', top: 0, border: 0, right: 0 }} aria-hidden="true">
                     <path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z"></path>
@@ -2168,15 +2211,15 @@ const AboutPage = () => (
             </a>
             <style>{`.github-corner:hover .octo-arm{animation:octocat-wave 560ms ease-in-out}@keyframes octocat-wave{0%,100%{transform:rotate(0)}20%,60%{transform:rotate(-25deg)}40%,80%{transform:rotate(10deg)}}@media (max-width:500px){.github-corner:hover .octo-arm{animation:none}.github-corner .octo-arm{animation:octocat-wave 560ms ease-in-out}}`}</style>
 
-            <h2 className="text-xl font-semibold mb-4 z-10 relative">Harvester VM Import UI</h2>
-            <p className="mb-2 z-10 relative"><strong>Version:</strong> 1.6.1</p>
-            <p className="mb-2 z-10 relative">This UI provides a user-friendly interface for the Harvester VM Import Controller, allowing users to import virtual machines from a VMware vCenter into a Harvester cluster.</p>
-            <p className="mb-6 italic text-sm text-gray-600 z-10 relative mt-2 border-l-4 border-blue-400 pl-3">Based off of an idea by Erico Mendonca (erico.mendonca@suse.com)</p>
+            <h2 className="text-xl font-semibold mb-4 z-10 relative text-main">Harvester VM Import UI</h2>
+            <p className="mb-2 z-10 relative text-main"><strong>Version:</strong> 1.6.2</p>
+            <p className="mb-2 z-10 relative text-secondary font-medium">This UI provides a user-friendly interface for the Harvester VM Import Controller, allowing users to import virtual machines from a VMware vCenter into a Harvester cluster.</p>
+            <p className="mb-6 italic text-sm text-secondary z-10 relative mt-2 border-l-4 border-blue-400 pl-3">Based off of an idea by Erico Mendonca (erico.mendonca@suse.com)</p>
 
-            <h3 className="text-lg font-semibold mb-3 z-10 relative">How to Use</h3>
-            <div className="space-y-4 z-10 relative text-gray-700">
+            <h3 className="text-lg font-semibold mb-3 z-10 relative text-main">How to Use</h3>
+            <div className="space-y-4 z-10 relative text-secondary">
                 <div>
-                    <h4 className="font-semibold text-gray-800 flex items-center mb-1"><List size={16} className="mr-1 text-blue-600" /> Migration Plans Tab</h4>
+                    <h4 className="font-semibold text-main flex items-center mb-1"><List size={16} className="mr-1 text-blue-600" /> Migration Plans Tab</h4>
                     <p className="text-sm">
                         This is your primary dashboard for managing imports. Once you have configured a source (vCenter or OVA), click <strong>Create</strong> to launch the Migration Plan Wizard. The wizard will guide you through:
                     </p>
@@ -2190,7 +2233,7 @@ const AboutPage = () => (
                 </div>
 
                 <div>
-                    <h4 className="font-semibold text-gray-800 flex items-center mb-1"><Server size={16} className="mr-1 text-blue-600" /> vCenter Sources Tab</h4>
+                    <h4 className="font-semibold text-main flex items-center mb-1"><Server size={16} className="mr-1 text-blue-600" /> vCenter Sources Tab</h4>
                     <p className="text-sm">
                         Before migrating VMs from VMware, you must register the vCenter instance here. Click <strong>Create</strong> and provide:
                     </p>
@@ -2202,7 +2245,7 @@ const AboutPage = () => (
                 </div>
 
                 <div>
-                    <h4 className="font-semibold text-gray-800 flex items-center mb-1"><Package size={16} className="mr-1 text-blue-600" /> OVA Sources Tab</h4>
+                    <h4 className="font-semibold text-main flex items-center mb-1"><Package size={16} className="mr-1 text-blue-600" /> OVA Sources Tab</h4>
                     <p className="text-sm">
                         Use this tab to define HTTP/HTTPS endpoints serving Open Virtual Appliance (.ova) files. Click <strong>Create</strong> to add an OVA source, specifying:
                     </p>
@@ -2214,7 +2257,7 @@ const AboutPage = () => (
                 </div>
 
                 <div>
-                    <h4 className="font-semibold text-gray-800 flex items-center mb-1"><Info size={16} className="mr-1 text-blue-600" /> About Tab</h4>
+                    <h4 className="font-semibold text-main flex items-center mb-1"><Info size={16} className="mr-1 text-blue-600" /> About Tab</h4>
                     <p className="text-sm">
                         You are here! This tab provides application versioning, attribution, frontend GitHub links, and basic documentation on how to navigate the utility.
                     </p>
@@ -2227,6 +2270,12 @@ const AboutPage = () => (
 export default function App() {
     const [expandedPlans, setExpandedPlans] = useState(new Set());
     const [selectedDisks, setSelectedDisks] = useState({}); // planUid -> diskIndex
+    const [theme, setTheme] = useState(localStorage.getItem('vm-import-theme') || 'light');
+
+    useEffect(() => {
+        document.body.className = `theme-${theme}`;
+        localStorage.setItem('vm-import-theme', theme);
+    }, [theme]);
     const [autoRefresh, setAutoRefresh] = useState(true);
     const [page, setPage] = useState('plans');
     const [plans, setPlans] = useState([]);
@@ -2525,7 +2574,7 @@ export default function App() {
                 return <SourceDetails source={selectedSource} onClose={() => setPage('sources')} />;
             case 'sources':
                 return (
-                    <div className="pr-6">
+                    <div className="w-full">
                         <Header title="vCenter Sources" onButtonClick={() => { setSourceToEdit(null); setShowSourceWizard(true); }} />
                         <SourcesTable
                             sources={sortedSources}
@@ -2544,13 +2593,13 @@ export default function App() {
                 return <OvaSourceDetails source={selectedOvaSource} onClose={() => setPage('ovaSources')} />;
             case 'ovaSources':
                 return (
-                    <div className="pr-6">
+                    <div className="w-full">
                         <Header title="OVA Sources" onButtonClick={() => { setOvaSourceToEdit(null); setShowOvaSourceWizard(true); }} />
                         <OvaSourcesTable sources={sortedOvaSources} onEdit={handleEditOvaSource} onDelete={setOvaSourceToDelete} onViewDetails={(source) => { setSelectedOvaSource(source); setPage('ovaSourceDetails'); }} sortConfig={ovaSourcesSort} onSort={handleSort(setOvaSourcesSort)} />
                         <div className="flex justify-end items-center mt-4 space-x-2">
                             <button onClick={fetchOvaSources} className="text-blue-500 hover:text-blue-700"><RefreshCw size={20} /></button>
                             <input type="number" value={refreshInterval} onChange={e => setRefreshInterval(e.target.value)} className="w-20 form-input text-sm" />
-                            <span className="text-sm text-gray-600">seconds</span>
+                            <span className="text-sm text-secondary">seconds</span>
                         </div>
                     </div>
                 );
@@ -2559,7 +2608,7 @@ export default function App() {
             case 'plans':
             default:
                 return (
-                    <div className="pr-6">
+                    <div className="w-full">
                         <Header title="VM Migration Plans" onButtonClick={() => setPage('createPlan')} />
                         {isLoading ? <p>Loading plans...</p> : <ResourceTable
                             plans={sortedPlans}
@@ -2579,15 +2628,15 @@ export default function App() {
                                     id="autoRefreshPlans"
                                     checked={autoRefresh}
                                     onChange={e => setAutoRefresh(e.target.checked)}
-                                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                    className="w-4 h-4 text-blue-600 border-main rounded focus:ring-blue-500"
                                 />
-                                <label htmlFor="autoRefreshPlans" className="text-sm font-medium text-gray-700 cursor-pointer">Auto-refresh</label>
+                                <label htmlFor="autoRefreshPlans" className="text-sm font-medium text-main cursor-pointer">Auto-refresh</label>
                             </div>
                             <div className="flex items-center space-x-2">
                                 <button onClick={fetchPlans} className="text-blue-500 hover:text-blue-700" title="Refresh Now"><RefreshCw size={20} /></button>
                                 <div className="flex items-center space-x-1">
                                     <input type="number" value={refreshInterval} onChange={e => setRefreshInterval(e.target.value)} className="w-16 form-input text-sm border rounded px-1" />
-                                    <span className="text-xs text-gray-500">s</span>
+                                    <span className="text-xs text-secondary">s</span>
                                 </div>
                             </div>
                         </div>
@@ -2597,14 +2646,38 @@ export default function App() {
     };
 
     return (
-        <div className="bg-gray-100 min-h-screen p-8 pr-12 font-sans">
-            <nav className="mb-6 border-b flex space-x-4">
-                <button onClick={() => setPage('plans')} className={`px-4 py-2 flex items-center font-medium transition-colors ${page === 'plans' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600 hover:text-gray-800'}`}><List size={18} className="mr-2" /> Migration Plans</button>
-                <button onClick={() => setPage('sources')} className={`px-4 py-2 flex items-center font-medium transition-colors ${page === 'sources' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600 hover:text-gray-800'}`}><Server size={18} className="mr-2" /> vCenter Sources</button>
-                <button onClick={() => setPage('ovaSources')} className={`px-4 py-2 flex items-center font-medium transition-colors ${page === 'ovaSources' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600 hover:text-gray-800'}`}><Package size={18} className="mr-2" /> OVA Sources</button>
-                <button onClick={() => setPage('about')} className={`px-4 py-2 flex items-center font-medium transition-colors ${page === 'about' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-gray-600 hover:text-gray-800'}`}><Info size={18} className="mr-2" /> About</button>
-            </nav>
-            <div className="max-w-7xl mx-auto">
+        <div className="min-h-screen p-2 md:p-4 font-sans transition-colors duration-300">
+            <div className="flex justify-between items-center mb-6 border-b pb-2">
+                <nav className="flex space-x-4">
+                    <div className="flex items-center mr-6 pr-6 border-r border-main">
+                        <img
+                            src="https://harvesterhci.io/img/logo_horizontal.svg"
+                            alt="Harvester"
+                            className="h-8 transition-opacity"
+                        />
+                    </div>
+                    <button onClick={() => setPage('plans')} className={`px-4 py-2 flex items-center font-medium transition-colors ${page === 'plans' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-secondary hover:text-main'}`}><List size={18} className="mr-2" /> Migration Plans</button>
+                    <button onClick={() => setPage('sources')} className={`px-4 py-2 flex items-center font-medium transition-colors ${page === 'sources' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-secondary hover:text-main'}`}><Server size={18} className="mr-2" /> vCenter Sources</button>
+                    <button onClick={() => setPage('ovaSources')} className={`px-4 py-2 flex items-center font-medium transition-colors ${page === 'ovaSources' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-secondary hover:text-main'}`}><Package size={18} className="mr-2" /> OVA Sources</button>
+                    <button onClick={() => setPage('about')} className={`px-4 py-2 flex items-center font-medium transition-colors ${page === 'about' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-secondary hover:text-main'}`}><Info size={18} className="mr-2" /> About</button>
+                </nav>
+
+                <div className="flex items-center space-x-2 relative group">
+                    <div className="flex items-center bg-card border border-main rounded-md px-3 py-1.5 shadow-sm">
+                        <Palette size={16} className="mr-2 text-blue-500" />
+                        <select
+                            value={theme}
+                            onChange={(e) => setTheme(e.target.value)}
+                            className="bg-transparent text-sm font-medium focus:outline-none cursor-pointer text-main"
+                        >
+                            <option value="light">Light</option>
+                            <option value="suse">SUSE Green</option>
+                            <option value="dark">Dark</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div className="w-full">
                 {renderPage()}
             </div>
 
@@ -2612,36 +2685,36 @@ export default function App() {
             {showOvaSourceWizard && <OvaSourceWizard onCancel={() => { setShowOvaSourceWizard(false); setOvaSourceToEdit(null); }} onSave={handleSaveOvaSource} source={ovaSourceToEdit} />}
 
             {planToDelete && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 z-50">
-                    <div className="bg-white rounded-lg shadow-xl p-6">
+                <div className="fixed inset-0 bg-opacity-50 flex justify-center items-center p-4 z-50">
+                    <div className="bg-card rounded-lg shadow-xl p-6">
                         <h3 className="text-lg font-bold">Confirm Deletion</h3>
                         <p className="my-4">Are you sure you want to delete the plan "{planToDelete.metadata.name}"?</p>
                         <div className="flex justify-end space-x-4">
-                            <button onClick={() => setPlanToDelete(null)} className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-md">Cancel</button>
+                            <button onClick={() => setPlanToDelete(null)} className="btn-secondary">Cancel</button>
                             <button onClick={handleDeletePlan} className="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-md">Delete</button>
                         </div>
                     </div>
                 </div>
             )}
             {sourceToDelete && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 z-50">
-                    <div className="bg-white rounded-lg shadow-xl p-6">
+                <div className="fixed inset-0 bg-opacity-50 flex justify-center items-center p-4 z-50">
+                    <div className="bg-card rounded-lg shadow-xl p-6">
                         <h3 className="text-lg font-bold">Confirm Deletion</h3>
                         <p className="my-4">Are you sure you want to delete the vCenter source "{sourceToDelete.metadata.name}"? This will also delete the associated credentials secret.</p>
                         <div className="flex justify-end space-x-4">
-                            <button onClick={() => setSourceToDelete(null)} className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-md">Cancel</button>
+                            <button onClick={() => setSourceToDelete(null)} className="btn-secondary">Cancel</button>
                             <button onClick={handleDeleteSource} className="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-md">Delete</button>
                         </div>
                     </div>
                 </div>
             )}
             {ovaSourceToDelete && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 z-50">
-                    <div className="bg-white rounded-lg shadow-xl p-6">
+                <div className="fixed inset-0 bg-opacity-50 flex justify-center items-center p-4 z-50">
+                    <div className="bg-card rounded-lg shadow-xl p-6">
                         <h3 className="text-lg font-bold">Confirm Deletion</h3>
                         <p className="my-4">Are you sure you want to delete the OVA source "{ovaSourceToDelete.metadata.name}"? This will also delete the associated credentials secret.</p>
                         <div className="flex justify-end space-x-4">
-                            <button onClick={() => setOvaSourceToDelete(null)} className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-md">Cancel</button>
+                            <button onClick={() => setOvaSourceToDelete(null)} className="btn-secondary">Cancel</button>
                             <button onClick={handleDeleteOvaSource} className="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-md">Delete</button>
                         </div>
                     </div>

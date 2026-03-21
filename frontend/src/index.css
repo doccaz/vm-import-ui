@@ -2,3 +2,117 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --bg-color: #f3f4f6;
+  --text-color: #1f2937;
+  --card-bg: #ffffff;
+  --border-color: #e5e7eb;
+  --nav-bg: #ffffff;
+  --primary-color: #2563eb;
+  --secondary-text: #4b5563;
+}
+
+.theme-suse {
+  --bg-color: #0c322c;
+  --text-color: #ffffff;
+  --card-bg: #173f35;
+  --border-color: #1e4a3f;
+  --nav-bg: #0c322c;
+  --primary-color: #30ba78;
+  --secondary-text: #00af7e;
+}
+
+.theme-dark {
+  --bg-color: #111827;
+  --text-color: #f9fafb;
+  --card-bg: #1f2937;
+  --border-color: #374151;
+  --nav-bg: #111827;
+  --primary-color: #3b82f6;
+  --secondary-text: #9ca3af;
+}
+
+body {
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Custom Utilities to use Variables */
+.bg-app {
+  background-color: var(--bg-color);
+}
+
+.bg-card {
+  background-color: var(--card-bg);
+}
+
+.text-main {
+  color: var(--text-color);
+}
+
+.text-secondary {
+  color: var(--secondary-text);
+}
+
+.border-main {
+  border-color: var(--border-color);
+}
+
+.bg-nav {
+  background-color: var(--nav-bg);
+}
+
+/* Global Form Element styling for Theming */
+input,
+select,
+textarea {
+  background-color: var(--card-bg) !important;
+  color: var(--text-color) !important;
+  border-color: var(--border-color) !important;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 2px solid var(--primary-color);
+  outline-offset: -1px;
+}
+
+input:disabled,
+select:disabled,
+textarea:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background-color: var(--bg-color) !important;
+}
+
+.form-input,
+.form-select {
+  background-color: var(--card-bg) !important;
+  color: var(--text-color) !important;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background-color: var(--border-color);
+}
+
+.btn-danger {
+  background-color: #dc2626;
+  color: #ffffff;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background-color: #b91c1c;
+}
