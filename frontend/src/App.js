@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Plus, ChevronRight, Server, Folder, Cloud, HardDrive, ArrowRight, X, Loader, CheckCircle, Cpu, MemoryStick, Trash2, Edit, AlertTriangle, RefreshCw, List, Package, Info, ChevronUp, ChevronDown, Search, Play, Square, RotateCcw, Power, CheckCircle2, HelpCircle, XCircle, Network, Check } from 'lucide-react';
 
 // --- Helper Functions ---
@@ -639,9 +639,12 @@ const PlanDetails = ({ plan, onClose }) => {
     const [showDebug, setShowDebug] = useState(null); // 'logs' or 'yaml'
     const [isLoadingDebug, setIsLoadingDebug] = useState(false);
     const [onlyRelevantLogs, setOnlyRelevantLogs] = useState(true);
+    const [followLogs, setFollowLogs] = useState(true);
+    const [fontSize, setFontSize] = useState(10); // px
+    const logsEndRef = useRef(null);
 
-    const fetchLogs = async (showAll = !onlyRelevantLogs) => {
-        setIsLoadingDebug(true);
+    const fetchLogs = async (showAll = !onlyRelevantLogs, isBackground = false) => {
+        if (!isBackground) setIsLoadingDebug(true);
         try {
             const response = await fetch(`/api/v1/plans/${plan.metadata.namespace}/${plan.metadata.name}/logs${showAll ? '?all=true' : ''}`);
             const data = await response.text();
@@ -649,9 +652,25 @@ const PlanDetails = ({ plan, onClose }) => {
         } catch (err) {
             setLogs("Failed to fetch logs.");
         } finally {
-            setIsLoadingDebug(false);
+            if (!isBackground) setIsLoadingDebug(false);
         }
     };
+
+    useEffect(() => {
+        let interval;
+        if (showDebug === 'logs' && followLogs) {
+            interval = setInterval(() => {
+                fetchLogs(!onlyRelevantLogs, true);
+            }, 2000); // 2 second auto-refresh for tailing
+        }
+        return () => clearInterval(interval);
+    }, [showDebug, followLogs, onlyRelevantLogs, plan.metadata.namespace, plan.metadata.name]);
+
+    useEffect(() => {
+        if (followLogs && logsEndRef.current) {
+            logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [logs, followLogs]);
 
     const fetchYaml = async () => {
         setIsLoadingDebug(true);
@@ -681,7 +700,7 @@ const PlanDetails = ({ plan, onClose }) => {
 
     return (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4 z-50">
-            <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl flex flex-col max-h-[90vh]">
+            <div className="bg-white rounded-lg shadow-xl w-[768px] max-w-[95vw] min-h-[50vh] flex flex-col max-h-[95vh] resize overflow-hidden">
                 <div className="flex justify-between items-center p-4 border-b">
                     <h2 className="text-xl font-semibold text-gray-800">{plan.metadata.name}</h2>
                     <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-200">
@@ -871,29 +890,45 @@ const PlanDetails = ({ plan, onClose }) => {
                                 Debug Logs
                             </button>
                             {showDebug === 'logs' && (
-                                <label className="flex items-center text-xs text-gray-400 cursor-pointer ml-auto pb-2">
-                                    <input
-                                        type="checkbox"
-                                        checked={onlyRelevantLogs}
-                                        onChange={(e) => {
-                                            const newVal = e.target.checked;
-                                            setOnlyRelevantLogs(newVal);
-                                            fetchLogs(!newVal);
-                                        }}
-                                        className="mr-1 h-3 w-3"
-                                    />
-                                    Only relevant
-                                </label>
+                                <div className="flex items-center space-x-4 ml-auto pb-2">
+                                    <div className="flex items-center text-xs space-x-2">
+                                        <button onClick={() => setFontSize(Math.max(6, fontSize - 1))} className="text-gray-500 hover:text-gray-700 font-bold px-1.5 bg-gray-100 rounded border hover:bg-gray-200">-A</button>
+                                        <span className="text-gray-600 font-mono w-8 text-center">{fontSize}px</span>
+                                        <button onClick={() => setFontSize(Math.min(24, fontSize + 1))} className="text-gray-500 hover:text-gray-700 font-bold px-1.5 bg-gray-100 rounded border hover:bg-gray-200">+A</button>
+                                    </div>
+                                    <label className="flex items-center text-xs text-gray-400 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={followLogs}
+                                            onChange={(e) => setFollowLogs(e.target.checked)}
+                                            className="mr-1 h-3 w-3"
+                                        />
+                                        Follow
+                                    </label>
+                                    <label className="flex items-center text-xs text-gray-400 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={onlyRelevantLogs}
+                                            onChange={(e) => {
+                                                const newVal = e.target.checked;
+                                                setOnlyRelevantLogs(newVal);
+                                                fetchLogs(!newVal, false);
+                                            }}
+                                            className="mr-1 h-3 w-3"
+                                        />
+                                        Only relevant
+                                    </label>
+                                </div>
                             )}
                             <button
                                 onClick={() => handleShowDebug('yaml')}
-                                className={`pb-2 text-sm font-medium transition-colors ${showDebug === 'yaml' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+                                className={`pb-2 text-sm font-medium transition-colors ${showDebug === 'yaml' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'} ${showDebug !== 'logs' ? 'ml-auto' : ''}`}
                             >
                                 View YAML
                             </button>
                         </div>
                         {showDebug && (
-                            <div className="mt-4 p-4 border rounded-md bg-gray-900 text-white font-mono text-[10px] max-h-96 overflow-y-auto shadow-inner group relative">
+                            <div className="mt-4 p-4 border rounded-md bg-gray-900 text-white font-mono max-h-96 overflow-y-auto shadow-inner group relative" style={{ fontSize: `${fontSize}px` }}>
                                 <button
                                     onClick={() => {
                                         const text = showDebug === 'logs' ? logs : yamlContent;
@@ -911,7 +946,10 @@ const PlanDetails = ({ plan, onClose }) => {
                                         <span className="text-gray-400">Streaming {showDebug}...</span>
                                     </div>
                                 ) : (
-                                    <pre className="whitespace-pre-wrap leading-relaxed">{showDebug === 'logs' ? logs : yamlContent}</pre>
+                                    <>
+                                        <pre className="whitespace-pre-wrap leading-relaxed">{showDebug === 'logs' ? logs : yamlContent}</pre>
+                                        <div ref={logsEndRef} />
+                                    </>
                                 )}
                             </div>
                         )}
