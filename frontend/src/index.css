@@ -72,6 +72,19 @@ textarea {
   border-color: var(--border-color) !important;
 }
 
+/* Ensure checkboxes and radios have visible borders and checked state */
+input[type="checkbox"],
+input[type="radio"] {
+  border-color: #9ca3af !important;
+  accent-color: var(--primary-color);
+}
+
+input[type="checkbox"]:checked,
+input[type="radio"]:checked {
+  background-color: var(--primary-color) !important;
+  border-color: var(--primary-color) !important;
+}
+
 input:focus,
 select:focus,
 textarea:focus {

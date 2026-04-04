@@ -13,7 +13,7 @@ import (
 )
 
 type K8sClients struct {
-	Clientset *kubernetes.Clientset
+	Clientset kubernetes.Interface
 	Dynamic   dynamic.Interface
 }
 

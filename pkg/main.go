@@ -27,7 +27,7 @@ func main() {
 	}
 	log.SetLevel(logLevel)
 
-	log.Info("Starting VM Import UI Backend v1.6.1")
+	log.Info("Starting VM Import UI Backend v1.7.0")
 
 	k8sClients, err := NewK8sClients()
 	if err != nil && os.Getenv("USE_MOCK_DATA") != "true" {
@@ -70,6 +70,30 @@ func main() {
 	api.HandleFunc("/harvester/vlanconfigs", ListVlanConfigsHandler(k8sClients)).Methods("GET")
 	api.HandleFunc("/harvester/storageclasses", ListStorageClassesHandler(k8sClients)).Methods("GET")
 	api.HandleFunc("/harvester/virtualmachines/{namespace}", ListVMsHandler(k8sClients)).Methods("GET")
+
+	// Forklift Handlers
+	api.HandleFunc("/forklift/availability", CheckForkliftAvailability(k8sClients)).Methods("GET")
+	api.HandleFunc("/forklift/providers", ListForkliftProvidersHandler(k8sClients)).Methods("GET")
+	api.HandleFunc("/forklift/providers", CreateForkliftProviderHandler(k8sClients)).Methods("POST")
+	api.HandleFunc("/forklift/providers/{namespace}/{name}", GetForkliftProviderDetails(k8sClients)).Methods("GET")
+	api.HandleFunc("/forklift/providers/{namespace}/{name}", UpdateForkliftProviderHandler(k8sClients)).Methods("PUT")
+	api.HandleFunc("/forklift/providers/{namespace}/{name}", DeleteForkliftProviderHandler(k8sClients)).Methods("DELETE")
+	api.HandleFunc("/forklift/providers/{namespace}/{name}/yaml", HandleGetSourceYAML(k8sClients, forkliftProviderGVR)).Methods("GET")
+	api.HandleFunc("/forklift/inventory/{namespace}/{name}", HandleGetForkliftInventory(k8sClients)).Methods("GET")
+	api.HandleFunc("/forklift/inventory/ova/{namespace}/{name}/{resource}", HandleGetForkliftOvaInventory(k8sClients)).Methods("GET")
+	api.HandleFunc("/forklift/plans", ListForkliftPlansHandler(k8sClients)).Methods("GET")
+	api.HandleFunc("/forklift/plans", CreateForkliftPlanHandler(k8sClients)).Methods("POST")
+	api.HandleFunc("/forklift/plans/{namespace}/{name}", DeleteForkliftPlanHandler(k8sClients)).Methods("DELETE")
+	api.HandleFunc("/forklift/plans/{namespace}/{name}/logs", HandleGetForkliftLogs(k8sClients)).Methods("GET")
+	api.HandleFunc("/forklift/plans/{namespace}/{name}/yaml", HandleGetForkliftPlanYAML(k8sClients)).Methods("GET")
+	api.HandleFunc("/forklift/plans/{namespace}/{name}/run", CreateForkliftMigrationHandler(k8sClients)).Methods("POST")
+	api.HandleFunc("/forklift/plans/{namespace}/{name}/migration", GetForkliftMigrationStatus(k8sClients)).Methods("GET")
+	api.HandleFunc("/forklift/plans/{namespace}/{name}/migration", DeleteForkliftMigrationHandler(k8sClients)).Methods("DELETE")
+	api.HandleFunc("/forklift/networkmaps/{namespace}/{name}", HandleGetResource(k8sClients, forkliftNetworkMapGVR)).Methods("GET")
+	api.HandleFunc("/forklift/networkmaps/{namespace}/{name}/yaml", HandleGetSourceYAML(k8sClients, forkliftNetworkMapGVR)).Methods("GET")
+	api.HandleFunc("/forklift/storagemaps/{namespace}/{name}", HandleGetResource(k8sClients, forkliftStorageMapGVR)).Methods("GET")
+	api.HandleFunc("/forklift/storagemaps/{namespace}/{name}/yaml", HandleGetSourceYAML(k8sClients, forkliftStorageMapGVR)).Methods("GET")
+	api.HandleFunc("/forklift/migrations/{namespace}/{name}/yaml", HandleGetSourceYAML(k8sClients, forkliftMigrationGVR)).Methods("GET")
 
 	// Serve the frontend
 	uiPath := "/ui"

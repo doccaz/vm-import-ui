@@ -1,6 +1,6 @@
 {
   "name": "vm-import-ui-frontend",
-  "version": "1.6.1",
+  "version": "1.7.0",
   "private": true,
   "dependencies": {
     "@tailwindcss/forms": "^0.5.6",
@@ -10,6 +10,9 @@
     "vm-import-ui-frontend": "file:"
   },
   "devDependencies": {
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "react-scripts": "5.0.1",
     "tailwindcss": "^3.3.3"
   },

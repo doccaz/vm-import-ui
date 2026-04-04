@@ -40,23 +40,26 @@ type VMDisk struct {
 // VMNetwork represents a network interface in vCenter
 type VMNetwork struct {
 	Name string `json:"name"`
+	ID   string `json:"id"`
 	MAC  string `json:"mac"`
 	Key  int32  `json:"key"`
 }
 
 // InventoryNode represents a generic node in the vCenter inventory tree.
 type InventoryNode struct {
-	ID         string          `json:"id"`
-	Name       string          `json:"name"`
-	Type       string          `json:"type"`
-	Children   []InventoryNode `json:"children,omitempty"`
-	Networks   []VMNetwork     `json:"networks,omitempty"`
-	Disks      []VMDisk        `json:"disks,omitempty"`
-	CPU        int32           `json:"cpu,omitempty"`
-	MemoryMB   int32           `json:"memoryMB,omitempty"`
-	DiskSizeGB int64           `json:"diskSizeGB,omitempty"`
-	Folder     string          `json:"folder,omitempty"`
-	PowerState string          `json:"powerState,omitempty"`
+	ID            string          `json:"id"`
+	Name          string          `json:"name"`
+	Type          string          `json:"type"`
+	Children      []InventoryNode `json:"children,omitempty"`
+	Networks      []VMNetwork     `json:"networks,omitempty"`
+	Disks         []VMDisk        `json:"disks,omitempty"`
+	CPU           int32           `json:"cpu,omitempty"`
+	MemoryMB      int32           `json:"memoryMB,omitempty"`
+	DiskSizeGB    int64           `json:"diskSizeGB,omitempty"`
+	Folder        string          `json:"folder,omitempty"`
+	PowerState    string          `json:"powerState,omitempty"`
+	DatastoreID   string          `json:"datastoreId,omitempty"`
+	DatastoreName string          `json:"datastoreName,omitempty"`
 }
 
 // GetVCenterInventory connects to vCenter and returns the inventory tree.
@@ -137,7 +140,7 @@ func processEntity(ctx context.Context, c *govmomi.Client, entity object.Referen
 	switch e := entity.(type) {
 	case *object.VirtualMachine:
 		var mvm mo.VirtualMachine
-		err := pc.RetrieveOne(ctx, ref, []string{"guest", "summary", "config", "network", "config.hardware.device", "runtime"}, &mvm)
+		err := pc.RetrieveOne(ctx, ref, []string{"guest", "summary", "config", "network", "config.hardware.device", "runtime", "datastore"}, &mvm)
 		if err != nil {
 			return nil, err
 		}
@@ -175,15 +178,21 @@ func processEntity(ctx context.Context, c *govmomi.Client, entity object.Referen
 					backing := card.GetVirtualEthernetCard().Backing
 
 					netName := "unknown"
+					netID := ""
 					switch backingInfo := backing.(type) {
 					case *types.VirtualEthernetCardNetworkBackingInfo:
 						netName = backingInfo.DeviceName
+						if backingInfo.Network != nil {
+							netID = backingInfo.Network.Value
+						}
 					case *types.VirtualEthernetCardDistributedVirtualPortBackingInfo:
 						netName = backingInfo.Port.PortgroupKey
+						netID = backingInfo.Port.PortgroupKey
 					}
 
 					vmNetworks = append(vmNetworks, VMNetwork{
 						Name: netName,
+						ID:   netID,
 						MAC:  card.GetVirtualEthernetCard().MacAddress,
 						Key:  card.GetVirtualEthernetCard().Key,
 					})
@@ -219,6 +228,17 @@ func processEntity(ctx context.Context, c *govmomi.Client, entity object.Referen
 
 		node.PowerState = string(mvm.Runtime.PowerState)
 		node.Folder = folderPath // Store the accumulated folder path
+
+		// Auto-detect datastore ID from the VM's datastore references
+		if len(mvm.Datastore) > 0 {
+			node.DatastoreID = mvm.Datastore[0].Value
+			// Try to get the datastore name
+			var dsmo mo.Datastore
+			if dsErr := pc.RetrieveOne(ctx, mvm.Datastore[0], []string{"name"}, &dsmo); dsErr == nil {
+				node.DatastoreName = dsmo.Name
+			}
+		}
+
 		return node, nil
 
 	case *object.Folder:
@@ -438,4 +458,80 @@ func UpdateVMNetworkMAC(ctx context.Context, creds VCenterCredentials, vmName st
 	}
 
 	return task.Wait(ctx)
+}
+
+// GetVCenterInventoryAutoDiscover connects to vCenter and auto-discovers the first datacenter.
+// This is used by Forklift, which doesn't store the datacenter name in the Provider spec.
+func GetVCenterInventoryAutoDiscover(ctx context.Context, creds VCenterCredentials) (*InventoryNode, error) {
+	fullURL := creds.URL
+	if !strings.HasPrefix(fullURL, "https://") && !strings.HasPrefix(fullURL, "http://") {
+		fullURL = "https://" + fullURL
+	}
+
+	u, err := url.Parse(fullURL)
+	if err != nil {
+		return nil, err
+	}
+	u.User = url.UserPassword(creds.Username, creds.Password)
+
+	log.Infof("Connecting to vCenter at %s (auto-discover mode)", creds.URL)
+	c, err := govmomi.NewClient(ctx, u, true)
+	if err != nil {
+		return nil, err
+	}
+	defer c.Logout(ctx)
+
+	finder := find.NewFinder(c.Client, true)
+
+	// If datacenter is specified, use it; otherwise auto-discover
+	var dc *object.Datacenter
+	if creds.Datacenter != "" {
+		dc, err = finder.Datacenter(ctx, creds.Datacenter)
+		if err != nil {
+			return nil, fmt.Errorf("failed to find datacenter %s: %w", creds.Datacenter, err)
+		}
+	} else {
+		// Auto-discover: get the default datacenter
+		dc, err = finder.DefaultDatacenter(ctx)
+		if err != nil {
+			// Try listing all datacenters
+			dcs, listErr := finder.DatacenterList(ctx, "*")
+			if listErr != nil || len(dcs) == 0 {
+				return nil, fmt.Errorf("no datacenter found: %v", err)
+			}
+			dc = dcs[0]
+		}
+	}
+
+	finder.SetDatacenter(dc)
+
+	rootNode := &InventoryNode{
+		Name: dc.Name(),
+		Type: "datacenter",
+	}
+
+	folders, err := dc.Folders(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	rootFolder := object.NewFolder(c.Client, folders.VmFolder.Reference())
+	children, err := rootFolder.Children(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, child := range children {
+		node, err := processEntity(ctx, c, child, "")
+		if err != nil {
+			log.Warnf("Could not process entity %s: %v", child.Reference().Value, err)
+			continue
+		}
+		if node != nil {
+			rootNode.Children = append(rootNode.Children, *node)
+		}
+	}
+
+	log.Debugf("Constructed vCenter inventory tree (auto-discover): %+v", rootNode)
+	return rootNode, nil
 }
