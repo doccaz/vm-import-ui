@@ -62,8 +62,11 @@ type CreateForkliftProviderPayload struct {
 	URL          string `json:"url"`                    // vSphere URL or NFS path (for OVA: host:/nfs-path)
 	Username     string `json:"username"`
 	Password     string `json:"password"`
-	SdkEndpoint  string `json:"sdkEndpoint,omitempty"`  // "vcenter" (default) or "esxi" for standalone ESXi hosts
-	ProviderType string `json:"providerType,omitempty"` // "vsphere" (default) or "ova"
+	SdkEndpoint        string `json:"sdkEndpoint,omitempty"`        // "vcenter" (default) or "esxi" for standalone ESXi hosts
+	ProviderType       string `json:"providerType,omitempty"`       // "vsphere" (default) or "ova"
+	InsecureSkipVerify *bool  `json:"insecureSkipVerify,omitempty"` // nil = default true (backwards compat); false = validate TLS certs
+	CACert             string `json:"cacert,omitempty"`             // PEM-encoded CA certificate (used when insecureSkipVerify is false)
+	VddkInitImage      string `json:"vddkInitImage,omitempty"`     // VDDK container image for optimized disk transfers
 }
 
 // ForkliftNetworkMapEntry represents a single network mapping for Forklift
@@ -107,7 +110,9 @@ type CreateForkliftPlanPayload struct {
 	// Advanced options
 	MigrateSharedDisks bool `json:"migrateSharedDisks"`
 	PopulatorLabels    bool `json:"populatorLabels"`
-	Warm               bool `json:"warm,omitempty"`
+	Warm                    bool `json:"warm,omitempty"`
+	PreserveClusterCpuModel bool `json:"preserveClusterCpuModel,omitempty"`
+	PreserveStaticIPs       bool `json:"preserveStaticIPs,omitempty"`
 	// Source VM metadata for annotations (same pattern as VMIC)
 	SourceVmCpu        int32  `json:"sourceVmCpu,omitempty"`
 	SourceVmMemoryMB   int32  `json:"sourceVmMemoryMB,omitempty"`

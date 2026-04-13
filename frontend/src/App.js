@@ -1572,6 +1572,8 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities, forkliftAvaila
     const [migrateSharedDisks, setMigrateSharedDisks] = useState(true);
     const [populatorLabels, setPopulatorLabels] = useState(true);
     const [warmMigration, setWarmMigration] = useState(false);
+    const [preserveClusterCpuModel, setPreserveClusterCpuModel] = useState(false);
+    const [preserveStaticIPs, setPreserveStaticIPs] = useState(false);
     const [forkliftStorageMappings, setForkliftStorageMappings] = useState({});
     const [forkliftVolumeModes, setForkliftVolumeModes] = useState({});
     const [forkliftAccessModes, setForkliftAccessModes] = useState({});
@@ -1899,6 +1901,8 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities, forkliftAvaila
                 migrateSharedDisks: migrateSharedDisks,
                 populatorLabels: populatorLabels,
                 warm: selectedProviderType === 'ova' ? false : warmMigration,
+                preserveClusterCpuModel,
+                preserveStaticIPs,
                 defaultNetworkInterfaceModel: defaultModel || undefined,
                 sourceVmCpu: selectedVm?.cpu || 0,
                 sourceVmMemoryMB: selectedVm?.memoryMB || 0,
@@ -2268,6 +2272,32 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities, forkliftAvaila
                                             </p>
                                         </label>
                                     </div>
+                                    <div className="flex items-center" title={"Preserve the source cluster's CPU model on the target VM.\n\nUseful when migrating VMs that depend on specific CPU features or instruction sets. If disabled, the target VM will use the destination cluster's default CPU model."}>
+                                        <input
+                                            id="preserveClusterCpuModel"
+                                            type="checkbox"
+                                            checked={preserveClusterCpuModel}
+                                            onChange={e => setPreserveClusterCpuModel(e.target.checked)}
+                                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-main rounded"
+                                        />
+                                        <label htmlFor="preserveClusterCpuModel" className="ml-2 block text-sm text-main cursor-help">
+                                            Preserve CPU Model
+                                            <p className="text-xs text-secondary mt-0.5">Keep source cluster's CPU model on target VM.</p>
+                                        </label>
+                                    </div>
+                                    <div className="flex items-center" title={"Preserve static IP configurations from the source VM.\n\nWhen enabled, Forklift will attempt to maintain the same IP addresses on the migrated VM. Useful for VMs with hardcoded IPs or specific network configurations."}>
+                                        <input
+                                            id="preserveStaticIPs"
+                                            type="checkbox"
+                                            checked={preserveStaticIPs}
+                                            onChange={e => setPreserveStaticIPs(e.target.checked)}
+                                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-main rounded"
+                                        />
+                                        <label htmlFor="preserveStaticIPs" className="ml-2 block text-sm text-main cursor-help">
+                                            Preserve Static IPs
+                                            <p className="text-xs text-secondary mt-0.5">Maintain source VM's static IP addresses.</p>
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -2553,6 +2583,8 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities, forkliftAvaila
                                         <li>Migrate Shared Disks: {migrateSharedDisks ? 'Yes' : 'No'}</li>
                                         <li>Populator Labels: {populatorLabels ? 'Yes' : 'No'}</li>
                                         <li>Warm Migration: {warmMigration ? 'Yes' : 'No'}</li>
+                                        {preserveClusterCpuModel && <li>Preserve CPU Model: Yes</li>}
+                                        {preserveStaticIPs && <li>Preserve Static IPs: Yes</li>}
                                         {defaultModel && <li>Default NIC Model: {defaultModel}</li>}
                                     </ul>
                                     {sourceNetworks.length > 0 && (
@@ -2855,6 +2887,9 @@ const ForkliftProviderWizard = ({ onCancel, onSave, source, defaultNamespace, de
     const [password, setPassword] = useState('');
     const [sdkEndpoint, setSdkEndpoint] = useState('vcenter');
     const [providerType, setProviderType] = useState(defaultProviderType || 'vsphere');
+    const [insecureSkipVerify, setInsecureSkipVerify] = useState(true);
+    const [cacert, setCacert] = useState('');
+    const [vddkInitImage, setVddkInitImage] = useState('');
     const isEditMode = !!source;
 
     useEffect(() => {
@@ -2865,6 +2900,8 @@ const ForkliftProviderWizard = ({ onCancel, onSave, source, defaultNamespace, de
             setUsername(source.spec.username || '');
             setSdkEndpoint(source.spec?.settings?.sdkEndpoint || 'vcenter');
             setProviderType(source.spec?.type || 'vsphere');
+            setInsecureSkipVerify(source.spec?.insecureSkipVerify !== 'false');
+            setVddkInitImage(source.spec?.settings?.vddkInitImage || '');
         }
     }, [source, isEditMode]);
 
@@ -2872,7 +2909,12 @@ const ForkliftProviderWizard = ({ onCancel, onSave, source, defaultNamespace, de
         if (providerType === 'ova') {
             onSave({ name, namespace, url, providerType: 'ova' }, isEditMode);
         } else {
-            onSave({ name, namespace, url, username, password, sdkEndpoint, providerType: 'vsphere' }, isEditMode);
+            onSave({
+                name, namespace, url, username, password, sdkEndpoint, providerType: 'vsphere',
+                insecureSkipVerify,
+                cacert: insecureSkipVerify ? '' : cacert,
+                vddkInitImage,
+            }, isEditMode);
         }
     };
 
@@ -2947,6 +2989,44 @@ const ForkliftProviderWizard = ({ onCancel, onSave, source, defaultNamespace, de
                                 <label className="block text-sm font-medium text-main">Password</label>
                                 <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="mt-1 block w-full form-input" placeholder={isEditMode ? "Leave blank to keep existing password" : ""} />
                             </div>
+                            <div className="border-t pt-4 mt-2">
+                                <div className="flex items-center">
+                                    <input type="checkbox" id="insecureSkipVerify"
+                                        checked={insecureSkipVerify}
+                                        onChange={e => setInsecureSkipVerify(e.target.checked)}
+                                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-main rounded" />
+                                    <label htmlFor="insecureSkipVerify" className="ml-2 block text-sm font-medium text-main">
+                                        Skip TLS certificate verification
+                                    </label>
+                                </div>
+                                <p className="text-xs text-secondary mt-1">
+                                    {insecureSkipVerify
+                                        ? 'All TLS certificates will be accepted without validation. Not recommended for production.'
+                                        : 'TLS certificates will be validated. Provide a CA certificate below if using a private CA.'}
+                                </p>
+                                {!insecureSkipVerify && (
+                                    <div className="mt-3">
+                                        <label className="block text-sm font-medium text-main">CA Certificate (PEM)</label>
+                                        <textarea rows={5} value={cacert} onChange={e => setCacert(e.target.value)}
+                                            className="mt-1 block w-full form-input font-mono text-xs"
+                                            placeholder={"-----BEGIN CERTIFICATE-----\n...\n-----END CERTIFICATE-----"} />
+                                        <p className="text-xs text-secondary mt-1">
+                                            Paste the PEM-encoded CA certificate used to sign your {sdkEndpoint === 'esxi' ? 'ESXi host' : 'vCenter server'} certificate.
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                            <div>
+                                <div className="flex items-center space-x-1">
+                                    <label className="block text-sm font-medium text-main">VDDK Init Image</label>
+                                    <Info size={14} className="text-secondary cursor-help"
+                                        title="VMware Virtual Disk Development Kit (VDDK) container image. Dramatically improves disk transfer speed and is required for warm migrations and vSAN-backed VMs. Build from VMware's VDDK SDK (download from Broadcom/VMware), create a container image, and push to your registry." />
+                                </div>
+                                <input type="text" placeholder="registry.example.com/vddk:v8.0.3"
+                                    value={vddkInitImage} onChange={e => setVddkInitImage(e.target.value)}
+                                    className="mt-1 block w-full form-input" />
+                                <p className="text-xs text-secondary mt-1">Optional. When empty, Forklift uses a slower fallback transfer method.</p>
+                            </div>
                         </>
                     )}
                 </div>
@@ -3003,6 +3083,13 @@ const ForkliftProviderDetails = ({ provider, onClose }) => {
                             <p><strong>URL:</strong> {provider.spec?.url}</p>
                             <p><strong>Secret:</strong> {provider.spec?.secret?.namespace}/{provider.spec?.secret?.name}</p>
                             <p><strong>SDK Endpoint:</strong> {provider.spec?.settings?.sdkEndpoint || 'default'}</p>
+                            {provider.spec?.type === 'vsphere' && (
+                                <>
+                                    <p><strong>TLS Verification:</strong> {provider.spec?.insecureSkipVerify === 'false' ? 'Enabled' : 'Skipped (insecure)'}</p>
+                                    {provider.spec?.hasCACert && <p><strong>CA Certificate:</strong> Provided</p>}
+                                    <p><strong>VDDK Init Image:</strong> {provider.spec?.settings?.vddkInitImage || <span className="text-secondary italic">Not configured (slower fallback)</span>}</p>
+                                </>
+                            )}
                         </div>
                     </div>
                     <div>
@@ -3392,6 +3479,14 @@ const ForkliftPlanDetails = ({ plan, onClose, onRunMigration, forkliftNamespace 
                             <span className="text-main">{plan.spec?.migrateSharedDisks ? 'Yes' : 'No'}</span>
                             <span className="text-secondary">Warm Migration:</span>
                             <span className="text-main">{plan.spec?.warm ? 'Yes' : 'No'}</span>
+                            {plan.spec?.preserveClusterCpuModel && <>
+                                <span className="text-secondary">Preserve CPU Model:</span>
+                                <span className="text-main">Yes</span>
+                            </>}
+                            {plan.spec?.preserveStaticIPs && <>
+                                <span className="text-secondary">Preserve Static IPs:</span>
+                                <span className="text-main">Yes</span>
+                            </>}
                             <span className="text-secondary">Created:</span>
                             <span className="text-main text-xs">{formatDate(plan.metadata.creationTimestamp)}</span>
                             {defaultNicModel && <>

@@ -1218,11 +1218,18 @@ func CreateForkliftProviderHandler(clients *K8sClients) http.HandlerFunc {
 			}
 		} else {
 			// vSphere providers need credentials
+			insecureSkipVerify := "true"
+			if payload.InsecureSkipVerify != nil && !*payload.InsecureSkipVerify {
+				insecureSkipVerify = "false"
+			}
 			secretData = map[string]string{
 				"user":               payload.Username,
 				"password":           payload.Password,
 				"url":                payload.URL,
-				"insecureSkipVerify": "true",
+				"insecureSkipVerify": insecureSkipVerify,
+			}
+			if insecureSkipVerify == "false" && payload.CACert != "" {
+				secretData["cacert"] = payload.CACert
 			}
 		}
 
@@ -1256,7 +1263,7 @@ func CreateForkliftProviderHandler(clients *K8sClients) http.HandlerFunc {
 
 		// vSphere providers need sdkEndpoint settings; OVA providers have no settings
 		if providerType == "vsphere" {
-			providerSpec["settings"] = map[string]interface{}{
+			settings := map[string]interface{}{
 				"sdkEndpoint": func() string {
 					if payload.SdkEndpoint == "esxi" {
 						return "esxi"
@@ -1264,6 +1271,15 @@ func CreateForkliftProviderHandler(clients *K8sClients) http.HandlerFunc {
 					return "vcenter"
 				}(),
 			}
+			if payload.VddkInitImage != "" {
+				settings["vddkInitImage"] = payload.VddkInitImage
+			}
+			providerSpec["settings"] = settings
+		}
+
+		providerAnnotations := map[string]interface{}{}
+		if payload.VddkInitImage == "" {
+			providerAnnotations["forklift.konveyor.io/empty-vddk-init-image"] = "yes"
 		}
 
 		provider := &unstructured.Unstructured{
@@ -1271,11 +1287,9 @@ func CreateForkliftProviderHandler(clients *K8sClients) http.HandlerFunc {
 				"apiVersion": "forklift.konveyor.io/v1beta1",
 				"kind":       "Provider",
 				"metadata": map[string]interface{}{
-					"name":      payload.Name,
-					"namespace": payload.Namespace,
-					"annotations": map[string]interface{}{
-						"forklift.konveyor.io/empty-vddk-init-image": "yes",
-					},
+					"name":        payload.Name,
+					"namespace":   payload.Namespace,
+					"annotations": providerAnnotations,
 				},
 				"spec": providerSpec,
 			},
@@ -1308,12 +1322,15 @@ func GetForkliftProviderDetails(clients *K8sClients) http.HandlerFunc {
 			return
 		}
 
-		// Enrich with username from secret
+		// Enrich with info from secret
 		secretName, _ := getNestedStringOrWarn(providerObj.Object, "spec", "secret", "name")
 		if secretName != "" {
 			secret, err := clients.Clientset.CoreV1().Secrets(namespace).Get(context.TODO(), secretName, metav1.GetOptions{})
 			if err == nil {
-				providerObj.Object["spec"].(map[string]interface{})["username"] = string(secret.Data["user"])
+				specMap := providerObj.Object["spec"].(map[string]interface{})
+				specMap["username"] = string(secret.Data["user"])
+				specMap["insecureSkipVerify"] = string(secret.Data["insecureSkipVerify"])
+				specMap["hasCACert"] = len(secret.Data["cacert"]) > 0
 			}
 		}
 
@@ -1340,13 +1357,15 @@ func UpdateForkliftProviderHandler(clients *K8sClients) http.HandlerFunc {
 			return
 		}
 
-		// Update secret if credentials provided
+		// Update secret if credentials or TLS settings provided
 		secretName, found := getNestedStringOrWarn(providerObj.Object, "spec", "secret", "name")
 		if !found {
 			respondWithError(w, http.StatusInternalServerError, "Forklift Provider missing secret name")
 			return
 		}
-		if payload.Username != "" || payload.Password != "" {
+		needsSecretUpdate := payload.Username != "" || payload.Password != "" ||
+			payload.URL != "" || payload.InsecureSkipVerify != nil || payload.CACert != ""
+		if needsSecretUpdate {
 			secret, err := clients.Clientset.CoreV1().Secrets(namespace).Get(context.TODO(), secretName, metav1.GetOptions{})
 			if err != nil {
 				respondWithError(w, http.StatusInternalServerError, "Failed to get associated secret: "+err.Error())
@@ -1364,6 +1383,17 @@ func UpdateForkliftProviderHandler(clients *K8sClients) http.HandlerFunc {
 			}
 			if payload.URL != "" {
 				secret.StringData["url"] = payload.URL
+			}
+			if payload.InsecureSkipVerify != nil {
+				if *payload.InsecureSkipVerify {
+					secret.StringData["insecureSkipVerify"] = "true"
+					delete(secret.Data, "cacert")
+				} else {
+					secret.StringData["insecureSkipVerify"] = "false"
+					if payload.CACert != "" {
+						secret.StringData["cacert"] = payload.CACert
+					}
+				}
 			}
 			_, err = clients.Clientset.CoreV1().Secrets(namespace).Update(context.TODO(), secret, metav1.UpdateOptions{})
 			if err != nil {
@@ -1385,6 +1415,22 @@ func UpdateForkliftProviderHandler(clients *K8sClients) http.HandlerFunc {
 			if err := unstructured.SetNestedField(providerObj.Object, payload.SdkEndpoint, "spec", "settings", "sdkEndpoint"); err != nil {
 				respondWithError(w, http.StatusInternalServerError, "Failed to set sdkEndpoint: "+err.Error())
 				return
+			}
+		}
+
+		// Update VDDK init image
+		if payload.VddkInitImage != "" {
+			if err := unstructured.SetNestedField(providerObj.Object, payload.VddkInitImage, "spec", "settings", "vddkInitImage"); err != nil {
+				respondWithError(w, http.StatusInternalServerError, "Failed to set vddkInitImage: "+err.Error())
+				return
+			}
+			// Remove the empty-vddk annotation since we now have an image
+			annotations, _, _ := unstructured.NestedStringMap(providerObj.Object, "metadata", "annotations")
+			if annotations != nil {
+				delete(annotations, "forklift.konveyor.io/empty-vddk-init-image")
+				if err := unstructured.SetNestedStringMap(providerObj.Object, annotations, "metadata", "annotations"); err != nil {
+					log.Warnf("Failed to update annotations: %v", err)
+				}
 			}
 		}
 
@@ -1729,8 +1775,10 @@ func CreateForkliftPlanHandler(clients *K8sClients) http.HandlerFunc {
 						}
 						return payload.Warm
 					}(),
-					"migrateSharedDisks": payload.MigrateSharedDisks,
-					"vms":                vmEntries,
+					"migrateSharedDisks":      payload.MigrateSharedDisks,
+					"preserveClusterCpuModel": payload.PreserveClusterCpuModel,
+					"preserveStaticIPs":       payload.PreserveStaticIPs,
+					"vms":                     vmEntries,
 				},
 			},
 		}
