@@ -186,8 +186,29 @@ func processEntity(ctx context.Context, c *govmomi.Client, entity object.Referen
 							netID = backingInfo.Network.Value
 						}
 					case *types.VirtualEthernetCardDistributedVirtualPortBackingInfo:
-						netName = backingInfo.Port.PortgroupKey
 						netID = backingInfo.Port.PortgroupKey
+						netName = backingInfo.Port.PortgroupKey // fallback: raw moref key
+						pgRef := types.ManagedObjectReference{
+							Type:  "DistributedVirtualPortgroup",
+							Value: backingInfo.Port.PortgroupKey,
+						}
+						var dvpg mo.DistributedVirtualPortgroup
+						if err := pc.RetrieveOne(ctx, pgRef, []string{"name", "config.distributedVirtualSwitch"}, &dvpg); err == nil {
+							pgName := dvpg.Name
+							if dvpg.Config.DistributedVirtualSwitch != nil {
+								var dvsMe mo.ManagedEntity
+								if err2 := pc.RetrieveOne(ctx, *dvpg.Config.DistributedVirtualSwitch, []string{"name"}, &dvsMe); err2 == nil {
+									netName = dvsMe.Name + "/" + pgName
+								} else {
+									log.Warnf("Could not resolve dvSwitch name for portgroup %s: %v", backingInfo.Port.PortgroupKey, err2)
+									netName = pgName
+								}
+							} else {
+								netName = pgName
+							}
+						} else {
+							log.Warnf("Could not resolve DVPortgroup %s: %v", backingInfo.Port.PortgroupKey, err)
+						}
 					}
 
 					vmNetworks = append(vmNetworks, VMNetwork{
