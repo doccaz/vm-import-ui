@@ -29,6 +29,75 @@ func formatDiskSize(bytes int64) string {
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
+// getDVswitchAndPortgroupName retrieves the dvswitch name and portgroup name for a distributed virtual port
+// Returns a combined name in format "dvswitch-name/portgroup-name"
+func getDVswitchAndPortgroupName(ctx context.Context, c *govmomi.Client, portgroupKey string) (string, error) {
+	pc := property.DefaultCollector(c.Client)
+	
+	// Create a ManagedObjectReference for the distributed virtual portgroup
+	// portgroupKey is typically in format "dvportgroup-123"
+	pgRef := types.ManagedObjectReference{
+		Type:  "DistributedVirtualPortgroup",
+		Value: portgroupKey,
+	}
+	
+	// Query the DistributedVirtualPortgroup for its properties
+	var dvpg mo.DistributedVirtualPortgroup
+	err := pc.RetrieveOne(ctx, pgRef, []string{"config.name", "config.distributedVirtualSwitch"}, &dvpg)
+	if err != nil {
+		log.Warnf("Failed to retrieve DistributedVirtualPortgroup properties for %s: %v", portgroupKey, err)
+		return portgroupKey, nil // Fallback to just the portgroup key
+	}
+	
+	// Extract portgroup name - DVPortgroupConfigInfo is a direct struct
+	portgroupName := portgroupKey
+	if dvpg.Config.Name != "" {
+		portgroupName = dvpg.Config.Name
+	}
+	
+	// Get the DVSwitch reference from the portgroup config
+	dvswitchRef := dvpg.Config.DistributedVirtualSwitch
+	if dvswitchRef == nil {
+		log.Debugf("No DVSwitch reference found for portgroup %s", portgroupKey)
+		return portgroupName, nil
+	}
+	
+	log.Debugf("Looking up DVSwitch with ref: %s/%s", dvswitchRef.Type, dvswitchRef.Value)
+	
+	// Query the DistributedVirtualSwitch for its properties
+	var dvswitch mo.DistributedVirtualSwitch
+	err = pc.RetrieveOne(ctx, *dvswitchRef, []string{"config"}, &dvswitch)
+	if err != nil {
+		log.Warnf("Failed to retrieve DistributedVirtualSwitch properties: %v", err)
+		return portgroupName, nil // Fallback to just the portgroup name
+	}
+	
+	log.Debugf("Retrieved DVSwitch config type: %T, value: %+v", dvswitch.Config, dvswitch.Config)
+	
+	dvswitchName := "unknown"
+	if dvswitch.Config != nil {
+		// Try to extract name from various DVSwitch config types
+		switch config := dvswitch.Config.(type) {
+		case *types.VMwareDVSConfigInfo:
+			if config != nil && config.Name != "" {
+				dvswitchName = config.Name
+				log.Debugf("Found DVSwitch name via VMwareDVSConfigInfo: %s", dvswitchName)
+			}
+		case *types.DVSConfigInfo:
+			if config != nil && config.Name != "" {
+				dvswitchName = config.Name
+				log.Debugf("Found DVSwitch name via DVSConfigInfo: %s", dvswitchName)
+			}
+		default:
+			// If type assertion didn't work, try to use reflection to get the name field
+			log.Debugf("DVSwitch config type assertion failed. Actual type: %T", dvswitch.Config)
+		}
+	}
+	
+	// Return combined format: "dvswitch-name/portgroup-name"
+	return fmt.Sprintf("%s/%s", dvswitchName, portgroupName), nil
+}
+
 // VMDisk represents a virtual disk in vCenter
 type VMDisk struct {
 	Name     string `json:"name"`
@@ -186,8 +255,16 @@ func processEntity(ctx context.Context, c *govmomi.Client, entity object.Referen
 							netID = backingInfo.Network.Value
 						}
 					case *types.VirtualEthernetCardDistributedVirtualPortBackingInfo:
-						netName = backingInfo.Port.PortgroupKey
-						netID = backingInfo.Port.PortgroupKey
+						// For distributed virtual ports, get the dvswitch name and combine with portgroup
+						combinedName, err := getDVswitchAndPortgroupName(ctx, c, backingInfo.Port.PortgroupKey)
+						if err == nil {
+							netName = combinedName
+							netID = combinedName
+						} else {
+							// Fallback to just the portgroup key if lookup fails
+							netName = backingInfo.Port.PortgroupKey
+							netID = backingInfo.Port.PortgroupKey
+						}
 					}
 
 					vmNetworks = append(vmNetworks, VMNetwork{
