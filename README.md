@@ -1,109 +1,194 @@
 # Harvester VM Import UI
 
-This add-on provides a user-friendly web interface for the Harvester VM Import Controller, allowing users to import virtual machines from vCenter into Harvester through a simple, wizard-driven process.
+A web-based interface for importing virtual machines into [Harvester / SUSE Virtualization](https://harvesterhci.io/) clusters. Supports two migration engines — the native VM Import Controller and Forklift (Konveyor Migration Toolkit for Virtualization) — driven by a unified wizard-based UI.
 
-# Features
-* **Multi-Source Support**: Import from VMware vCenter or flat OVA files.
-* **Source Explorer**:
-    * Browse vCenter inventory directly.
-    * Perform VM operations (Power On/Off/Reboot, Rename) before migration.
-    * View and **edit VM MAC addresses** for the source VM via API.
-    * View and **edit VM Name** for the source VM via API.
-* **Smart Migration Plans**:
-    * Automated mapping of networks and storage.
-    * **Annotations Tracking**: Original VM characteristics (CPU, Memory, Disks) are saved for transparency.
-    * **Resource Comparison**: Easily compare source VM characteristics with current import status.
-* **Streamlined Debugging**:
-    * Integrated log viewer for the VM Import Controller.
-    * Toggle between full controller logs or **filtered logs** relevant to your specific plan.
-* **Management**: Monitor progress, view YAML, and delete plans with safety confirmations.
+---
 
-# Latest Release (v1.6.1)
-The latest version includes enhanced UI spacing, Kubernetes-compliant plan name validation, and more robust VM metadata tracking.
+## Features
 
+### Migration Engines
 
-# Quick Start (TL;DR)
+Both engines are available from the same wizard. Select the one that best fits your environment.
 
-1. Find the Kubeconfig file for your Harvester/SUSE Virtualization cluster (click on "Support" at the lower left on UI).
-2. Pull and run the latest version indicating the Kubeconfig file (docker works too):
-```
+#### VM Import Controller (native Harvester)
+
+- **Source types**: VMware vCenter or flat OVA file
+- **vCenter Source Explorer**:
+  - Browse the full vCenter inventory (Datacenter → Cluster → Host → VM)
+  - Power On / Off / Reset / Graceful Shutdown VMs before migration
+  - Rename source VMs directly from the UI
+  - Edit MAC addresses on individual NICs
+- **Migration wizard**:
+  - Automated network and storage mapping
+  - Per-NIC interface model selection (v1.6+)
+  - Disk bus type selection (v1.6+)
+  - Force power-off and configurable shutdown timeout (v1.6+)
+  - Skip preflight validation option (v1.6+)
+  - Annotations tracking: original CPU, memory, and disk characteristics saved on the plan
+- **Plan management**:
+  - List, inspect, run, and delete plans
+  - Integrated log viewer — toggle between full controller logs and plan-filtered logs
+  - YAML view for created CRs
+
+#### Forklift (Konveyor / Migration Toolkit for Virtualization)
+
+- **Provider types**: vSphere (vCenter or standalone ESXi) and OVA (NFS-mounted)
+- **Provider management**:
+  - Create, edit, and delete Forklift Providers
+  - TLS options per provider: skip verification or supply a custom CA certificate
+  - VDDK init image configuration for optimised disk transfer (dramatically faster than the fallback method)
+  - Automatic annotation when no VDDK image is provided
+  - Availability check with configurable Forklift namespace
+- **Migration wizard**:
+  - Network mapping: map source vSphere networks / port groups to pod network or Multus attachments
+  - Storage mapping: map source datastores (vSphere) or disks (OVA) to destination storage classes, with volume mode and access mode selection
+  - Custom destination VM name (RFC-1123 compliant)
+  - Migration options: warm migration, migrate shared disks, volume populator labels, preserve cluster CPU model, preserve static IPs, default NIC model
+- **Plan detail view** (tabbed):
+  - **Overview**: provider, target namespace, VM list, readiness status
+  - **Mappings**: live NetworkMap and StorageMap status with condition badges
+  - **Migration**: per-VM progress bars and phase tracking
+  - **Conditions**: full condition list with timestamps
+  - **Debug**: aggregated logs from Forklift controller and virt-v2v worker pods
+- **Full lifecycle**: run, cancel, delete migration; delete plan with cleanup of NetworkMap + StorageMap
+- **YAML view** for Plans, NetworkMaps, StorageMaps, and Migration CRs
+
+### General UI
+
+- **Three themes**: Light, SUSE, Dark (switchable at runtime)
+- **About screen** with version and build info
+- **Version-aware capabilities**: detects Harvester v1.6+ to unlock advanced options
+- **Responsive layout** with resizable log/debug panels
+
+---
+
+## Quick Start
+
+1. Obtain the kubeconfig for your Harvester / SUSE Virtualization cluster (**Support → Download KubeConfig** in the Harvester UI).
+2. Pull and run the container (Podman or Docker):
+
+```bash
 podman run -p 8080:8080 \
   -v ~/myharvester-kubeconfig:/kubeconfig:ro \
   ghcr.io/doccaz/vm-import-ui:latest
 ```
-3. Open your browser at http://localhost:8080
-4. Create a vCenter Source with your credentials
-5. Create a Migration Plan and select a VM to migrate from the inventory.
-6. Check the progress, wait a bit... you're done!
 
-# Screenshots
+3. Open your browser at **http://localhost:8080**
+4. Create a vCenter Source (for VMIC) or a Forklift Provider (for Forklift)
+5. Create a Migration Plan, select the VM, configure mappings
+6. Run the plan and monitor progress — done!
 
-Access the UI: open your web browser and navigate to http://localhost:8080.
+> **DNS note**: if your vSphere host uses a `.lan` or private domain that the container cannot resolve, mount your host resolver:
+> ```bash
+> podman run -p 8080:8080 \
+>   -v ~/myharvester-kubeconfig:/kubeconfig:ro \
+>   -v /etc/resolv.conf:/etc/resolv.conf:ro \
+>   ghcr.io/doccaz/vm-import-ui:latest
+> ```
+
+---
+
+## Screenshots — VM Import Controller
+
+Create a vCenter source:
 ![Create the VMware source configuration](screenshots/1-create-source.png)
 
-Select the Source VM from the inventory:
+Browse the vCenter inventory and select a VM:
 ![Select the source VM](screenshots/2-select-vm.png)
 
 Configure the destination VM:
-![Configure the destination VM](screenshots/3-config-vms.png)
+![Configure the destination VM](screenshots/3-config-vm.png)
 
-Select the destination namespace:
-![Configure the destination namespace for the imported VM](screenshots/3-config-vm.png)
+Map source and destination networks:
+![Map the source and destination networks](screenshots/4-map-vlans.png)
 
-Map the source and destionation networks for the imported VM:
-![Map the source and destination networks for the imported VM](screenshots/4-map-vlans.png)
-
-A summary will be shown with the actions that will be taken:
+Review the migration plan summary:
 ![Summary of what will be done](screenshots/5-summary.png)
 
-The VM Import Controller objects and created, and the migration process is submitted:
+Migration plan created and submitted:
 ![The migration starts](screenshots/6-migration-start.png)
 
-The migration process is monitored:
+Monitor migration progress:
 ![Migration progress](screenshots/7-migration-progress.png)
 
-And... the VM is created in Harvester!
+VM successfully created in Harvester:
 ![Migration finished](screenshots/8-migration-finished.png)
 
+YAML view for a migration plan:
+![YAML view](screenshots/vmimport-yaml.png)
 
-# Building Locally and Testing
+---
 
-Step 1: Build the Container ImageFrom the project's root directory, build the image using Podman or Docker.
+## Screenshots — Forklift
 
-Using Podman
-```
+![Forklift — screenshot 1](screenshots/forklift-1.png)
+
+![Forklift — screenshot 2](screenshots/forklift-2.png)
+
+![Forklift — screenshot 3](screenshots/forklift-3.png)
+
+![Forklift — screenshot 4](screenshots/forklift-4.png)
+
+![Forklift — screenshot 5](screenshots/forklift-5.png)
+
+![Forklift — screenshot 6](screenshots/forklift-6.png)
+
+---
+
+## Building Locally
+
+**Step 1 — Build the container image**
+
+```bash
 podman build -t vm-import-ui:local .
 ```
 
-Step 2: Run the Container
+**Step 2 — Run the container**
 
-Run the container, mapping port 8080 and mounting your local kubeconfig file.
-
-Using Podman
+```bash
+podman run -p 8080:8080 \
+  -v ~/.kube/config:/kubeconfig:ro \
+  -e KUBECONFIG=/kubeconfig \
+  vm-import-ui:local
 ```
-podman run -p 8080:8080 -v ~/.kube/config:/kubeconfig:ro -e KUBECONFIG=/kubeconfig vm-import-ui:local
-```
 
-Step 3: Enabling Debugging
+**Step 3 — Enable debug logging**
 
-To see verbose logs from the backend, set the LOG_LEVEL environment variable.
-
-Using Podman
-```
+```bash
 podman run -p 8080:8080 \
   -v ~/myharvester-kubeconfig:/kubeconfig:ro \
   -e LOG_LEVEL=debug \
   vm-import-ui:local
 ```
 
-# Workarounds
+**Run tests**
 
-In one case, the VSphere host (with a .lan domain) was not being correctly resolved by podman's internal DNS. You can overrride the internal resolv.conf to point to your own DNS like this:
+```bash
+# Go backend
+cd pkg && go test -v ./...
 
+# React frontend
+cd frontend && npx react-scripts test --watchAll=false
 ```
-podman run -p 8080:8080 \
-  -v ~/myharvester-kubeconfig:/kubeconfig:ro \
-  -v /etc/resolv.conf:/etc/resolv.conf:ro \
-  ghcr.io/doccaz/vm-import-ui:latest
-```
 
+---
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `KUBECONFIG` | `/kubeconfig` | Path to kubeconfig file |
+| `LOG_LEVEL` | `info` | Log level: `debug`, `info`, `warn`, `error` |
+| `UI_PATH` | `/ui` | Path to frontend build directory |
+| `USE_MOCK_DATA` | `false` | Run without a Kubernetes cluster (dev mode) |
+
+---
+
+## Latest Release (v1.7.0)
+
+- Full Forklift (MTV) support: provider management, plan creation, migration lifecycle, detailed plan view with log aggregation
+- TLS options and VDDK image configuration for Forklift vSphere providers
+- OVA provider support via Forklift (NFS-mounted OVF/OVA files)
+- Warm migration, shared disk, and static IP preservation options for Forklift
+- PortGroup support in network mapping
+- Three UI themes (Light, SUSE, Dark)
