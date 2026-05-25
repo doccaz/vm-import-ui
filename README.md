@@ -59,6 +59,7 @@ Both engines are available from the same wizard. Select the one that best fits y
 - **About screen** with version and build info
 - **Version-aware capabilities**: detects Harvester v1.6+ to unlock advanced options
 - **Responsive layout** with resizable log/debug panels
+- **Support Bundle** (`About` page): one-click download of a redacted diagnostics `.tar.gz` containing cluster capabilities, all migration CRs (with `status.conditions`), network/storage maps, source/provider definitions, and (opt-in) live vCenter inventory. Secret values are never included; an anonymization option hashes VM/folder/network names for privacy. A spinner shows progress while the archive is being assembled, with inline error feedback on failure.
 
 ---
 
@@ -184,11 +185,17 @@ cd frontend && npx react-scripts test --watchAll=false
 
 ---
 
-## Latest Release (v1.7.0)
+## Latest Release (v1.7.2)
+
+- **Support Bundle**: one-click diagnostics archive from the About page — redacted `.tar.gz` with cluster state, all migration/provider CRs, conditions, and optional live vCenter inventory; secret values never included; anonymization option available
+- Support bundle button shows a loading spinner while the archive is being assembled and surfaces errors inline
+- PortGroup discovery support in vCenter network mapping
+- TLS skip-verify and custom CA certificate options for Forklift vSphere providers
+- VDDK init image configuration for Forklift providers (dramatically faster disk transfer; correct annotation applied when no VDDK image is set)
+
+### v1.7.0
 
 - Full Forklift (MTV) support: provider management, plan creation, migration lifecycle, detailed plan view with log aggregation
-- TLS options and VDDK image configuration for Forklift vSphere providers
 - OVA provider support via Forklift (NFS-mounted OVF/OVA files)
 - Warm migration, shared disk, and static IP preservation options for Forklift
-- PortGroup support in network mapping
 - Three UI themes (Light, SUSE, Dark)
