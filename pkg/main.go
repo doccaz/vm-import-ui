@@ -27,7 +27,7 @@ func main() {
 	}
 	log.SetLevel(logLevel)
 
-	log.Info("Starting VM Import UI Backend v1.7.0")
+	log.Infof("Starting VM Import UI Backend v%s", appVersion)
 
 	k8sClients, err := NewK8sClients()
 	if err != nil && os.Getenv("USE_MOCK_DATA") != "true" {
@@ -39,6 +39,7 @@ func main() {
 
 	// API Handlers
 	api.HandleFunc("/capabilities", GetCapabilitiesHandler(k8sClients)).Methods("GET")
+	api.HandleFunc("/support-bundle", SupportBundleHandler(k8sClients)).Methods("GET")
 	api.HandleFunc("/vcenter/inventory/{namespace}/{name}", HandleGetInventory(k8sClients)).Methods("GET")
 	api.HandleFunc("/vcenter/vm/{namespace}/{name}/power", HandleVMPowerOp(k8sClients)).Methods("POST")
 	api.HandleFunc("/vcenter/vm/{namespace}/{name}/rename", HandleVMRename(k8sClients)).Methods("POST")

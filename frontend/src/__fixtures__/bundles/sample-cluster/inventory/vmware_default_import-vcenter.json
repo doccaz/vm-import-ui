@@ -1,0 +1,77 @@
+{
+  "id": "datacenter-2",
+  "name": "BQE-DATACENTER",
+  "type": "datacenter",
+  "children": [
+    {
+      "id": "group-v120027",
+      "name": "DEVOPS",
+      "type": "Folder",
+      "children": [
+        {
+          "id": "vm-139860",
+          "name": "VMDEVOPSTSTWIN01",
+          "type": "VirtualMachine",
+          "cpu": 2,
+          "memoryMB": 4096,
+          "diskSizeGB": 40,
+          "folder": "DESENVOLVIMENTO/WINDOWS/DEVOPS",
+          "powerState": "poweredOff",
+          "datastoreId": "datastore-10061",
+          "datastoreName": "SVT_DS_SERVICOS_06",
+          "disks": [
+            { "name": "Hard disk 1", "capacity": 96636764160, "busType": "scsi", "unitNum": 0 }
+          ],
+          "networks": [
+            { "name": "VM Network - VLAN16", "id": "network-97256", "mac": "00:50:56:9e:f5:aa", "key": 4000 }
+          ]
+        },
+        {
+          "id": "vm-139861",
+          "name": "VGENEXUSLIC01",
+          "type": "VirtualMachine",
+          "cpu": 1,
+          "memoryMB": 2048,
+          "diskSizeGB": 20,
+          "folder": "DESENVOLVIMENTO/WINDOWS/DEVOPS",
+          "powerState": "poweredOn",
+          "datastoreId": "datastore-10061",
+          "datastoreName": "SVT_DS_SERVICOS_06",
+          "disks": [
+            { "name": "Hard disk 1", "capacity": 21474836480, "busType": "scsi", "unitNum": 0 }
+          ],
+          "networks": [
+            { "name": "VM Network - VLAN16", "id": "network-97256", "mac": "00:50:56:9e:ea:74", "key": 4000 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "group-vinfra",
+      "name": "INFRA",
+      "type": "Folder",
+      "children": [
+        {
+          "id": "vm-omni-151",
+          "name": "OmniStackVC-172-16-27-151",
+          "type": "VirtualMachine",
+          "cpu": 8,
+          "memoryMB": 49152,
+          "diskSizeGB": 200,
+          "folder": "INFRA",
+          "powerState": "poweredOn",
+          "datastoreId": "datastore-5368",
+          "datastoreName": "SVT_DS_SERVICOS_05",
+          "disks": [
+            { "name": "Hard disk 1", "capacity": 214748364800, "busType": "scsi", "unitNum": 0 }
+          ],
+          "networks": [
+            { "name": "VM Network", "id": "network-56", "mac": "00:50:56:9e:65:09", "key": 4000 },
+            { "name": "SVT_FedPortGroup", "id": "network-58", "mac": "00:50:56:9e:75:31", "key": 4001 },
+            { "name": "SVT_StoragePortGroup", "id": "network-59", "mac": "00:50:56:9e:03:ef", "key": 4002 }
+          ]
+        }
+      ]
+    }
+  ]
+}

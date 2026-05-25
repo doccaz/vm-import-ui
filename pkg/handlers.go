@@ -122,33 +122,36 @@ type CapabilityConfig struct {
 }
 
 // NEW: Handler to check Harvester version and features
+// gatherCapabilities reads the Harvester server-version setting and derives
+// feature flags. On error it returns an "unknown" config alongside the error,
+// so callers can choose to surface defaults (the HTTP handler) or record the
+// failure (the support bundle).
+func gatherCapabilities(ctx context.Context, clients *K8sClients) (CapabilityConfig, error) {
+	setting, err := clients.Dynamic.Resource(settingsGVR).Get(ctx, "server-version", metav1.GetOptions{})
+	if err != nil {
+		return CapabilityConfig{HarvesterVersion: "unknown", HasAdvancedPower: false}, err
+	}
+
+	version, _ := getNestedStringOrWarn(setting.Object, "value")
+
+	// v1.6.0+ unlocks advanced power ops, disk bus type, and preflight checks.
+	hasAdvanced := strings.Contains(version, "v1.6") ||
+		strings.Contains(version, "v1.7") ||
+		strings.Contains(version, "v1.8") ||
+		strings.Contains(version, "v1.9") ||
+		strings.Contains(version, "master")
+
+	return CapabilityConfig{HarvesterVersion: version, HasAdvancedPower: hasAdvanced}, nil
+}
+
 func GetCapabilitiesHandler(clients *K8sClients) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-
-		// 1. Fetch the 'server-version' setting
-		setting, err := clients.Dynamic.Resource(settingsGVR).Get(context.TODO(), "server-version", metav1.GetOptions{})
+		caps, err := gatherCapabilities(r.Context(), clients)
 		if err != nil {
-			// If we fail to check (e.g., permissions or very old cluster), assume old version
+			// Permissions or a very old cluster — fall back to defaults.
 			log.Warnf("Could not determine Harvester version: %v", err)
-			respondWithJSON(w, http.StatusOK, CapabilityConfig{HarvesterVersion: "unknown", HasAdvancedPower: false})
-			return
 		}
-
-		// 2. Extract the value
-		version, _ := getNestedStringOrWarn(setting.Object, "value")
-
-		// 3. Check logic: Is this v1.6.0 or newer?
-		// Simple check looks for "v1.6", "v1.7", "master" or newer versions.
-		hasAdvanced := strings.Contains(version, "v1.6") ||
-			strings.Contains(version, "v1.7") ||
-			strings.Contains(version, "v1.8") ||
-			strings.Contains(version, "v1.9") ||
-			strings.Contains(version, "master")
-
-		respondWithJSON(w, http.StatusOK, CapabilityConfig{
-			HarvesterVersion: version,
-			HasAdvancedPower: hasAdvanced,
-		})
+		respondWithJSON(w, http.StatusOK, caps)
 	}
 }
 
@@ -159,6 +162,45 @@ type VCenterCredentials struct {
 	Datacenter string
 }
 
+// gatherVCenterInventory resolves a VmwareSource's endpoint and credentials and
+// returns its inventory tree. Shared by the inventory endpoint and the support
+// bundle so both go through one code path.
+func gatherVCenterInventory(ctx context.Context, clients *K8sClients, namespace, name string) (*InventoryNode, error) {
+	sourceObj, err := clients.Dynamic.Resource(vmwareSourceGVR).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get VmwareSource: %w", err)
+	}
+
+	endpoint, found := getNestedStringOrWarn(sourceObj.Object, "spec", "endpoint")
+	if !found {
+		return nil, fmt.Errorf("VmwareSource missing spec.endpoint")
+	}
+	datacenter, _ := getNestedStringOrWarn(sourceObj.Object, "spec", "dc")
+
+	secretName, found := getNestedStringOrWarn(sourceObj.Object, "spec", "credentials", "name")
+	if !found {
+		return nil, fmt.Errorf("VmwareSource missing credentials secret name")
+	}
+	secretNamespace, found := getNestedStringOrWarn(sourceObj.Object, "spec", "credentials", "namespace")
+	if !found {
+		return nil, fmt.Errorf("VmwareSource missing credentials secret namespace")
+	}
+
+	secret, err := clients.Clientset.CoreV1().Secrets(secretNamespace).Get(ctx, secretName, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get credentials secret: %w", err)
+	}
+
+	creds := VCenterCredentials{
+		URL:        endpoint,
+		Username:   string(secret.Data["username"]),
+		Password:   string(secret.Data["password"]),
+		Datacenter: datacenter,
+	}
+
+	return GetVCenterInventory(ctx, creds)
+}
+
 func HandleGetInventory(clients *K8sClients) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
@@ -167,44 +209,7 @@ func HandleGetInventory(clients *K8sClients) http.HandlerFunc {
 
 		log.Infof("Fetching inventory for VmwareSource %s/%s", namespace, name)
 
-		sourceObj, err := clients.Dynamic.Resource(vmwareSourceGVR).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
-		if err != nil {
-			respondWithError(w, http.StatusInternalServerError, "Failed to get VmwareSource: "+err.Error())
-			return
-		}
-
-		endpoint, found := getNestedStringOrWarn(sourceObj.Object, "spec", "endpoint")
-		if !found {
-			respondWithError(w, http.StatusInternalServerError, "VmwareSource missing spec.endpoint")
-			return
-		}
-		datacenter, _ := getNestedStringOrWarn(sourceObj.Object, "spec", "dc")
-
-		secretName, found := getNestedStringOrWarn(sourceObj.Object, "spec", "credentials", "name")
-		if !found {
-			respondWithError(w, http.StatusInternalServerError, "VmwareSource missing credentials secret name")
-			return
-		}
-		secretNamespace, found := getNestedStringOrWarn(sourceObj.Object, "spec", "credentials", "namespace")
-		if !found {
-			respondWithError(w, http.StatusInternalServerError, "VmwareSource missing credentials secret namespace")
-			return
-		}
-
-		secret, err := clients.Clientset.CoreV1().Secrets(secretNamespace).Get(context.TODO(), secretName, metav1.GetOptions{})
-		if err != nil {
-			respondWithError(w, http.StatusInternalServerError, "Failed to get credentials secret: "+err.Error())
-			return
-		}
-
-		creds := VCenterCredentials{
-			URL:        endpoint,
-			Username:   string(secret.Data["username"]),
-			Password:   string(secret.Data["password"]),
-			Datacenter: datacenter,
-		}
-
-		inventory, err := GetVCenterInventory(r.Context(), creds)
+		inventory, err := gatherVCenterInventory(r.Context(), clients, namespace, name)
 		if err != nil {
 			log.Errorf("Failed to get vCenter inventory: %v", err)
 			respondWithError(w, http.StatusInternalServerError, err.Error())
