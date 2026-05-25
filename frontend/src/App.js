@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Plus, ChevronRight, Server, Folder, Cloud, HardDrive, ArrowRight, X, Loader, CheckCircle, Cpu, MemoryStick, Trash2, Edit, AlertTriangle, RefreshCw, List, Package, Info, ChevronUp, ChevronDown, Search, Play, Square, RotateCcw, Power, CheckCircle2, HelpCircle, XCircle, Network, Check, Palette, ExternalLink, Copy, Download } from 'lucide-react';
-import { formatBytes, formatDate, formatDuration, slugify } from './utils';
+import { formatBytes, formatDate, formatDuration, slugify, buildVmicPlan } from './utils';
 
 const getNestedValue = (obj, path) => {
     return path.split('.').reduce((acc, part) => acc && acc[part], obj);
 };
 
 // --- Copy to Clipboard Button ---
-const CopyButton = ({ text, className = "" }) => {
+const CopyButton = ({ text, label = "Copy", className = "" }) => {
     const [copied, setCopied] = useState(false);
     const handleCopy = () => {
         navigator.clipboard.writeText(text);
@@ -15,13 +15,14 @@ const CopyButton = ({ text, className = "" }) => {
         setTimeout(() => setCopied(false), 2000);
     };
     return (
-        <button onClick={handleCopy} className={`bg-gray-700 hover:bg-gray-600 p-2 rounded shadow-lg transition-opacity ${className}`} title="Copy to clipboard">
-            {copied ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
+        <button onClick={handleCopy} className={`inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-3 py-1.5 rounded-md shadow-lg transition-colors ${className}`} title="Copy to clipboard">
+            {copied ? <Check size={14} className="text-green-300" /> : <Copy size={14} />}
+            {label && <span>{copied ? "Copied!" : label}</span>}
         </button>
     );
 };
 
-const DownloadButton = ({ text, filename, className = "" }) => {
+const DownloadButton = ({ text, filename, label = "Download", className = "" }) => {
     const handleDownload = () => {
         const blob = new Blob([text], { type: 'text/plain' });
         const url = URL.createObjectURL(blob);
@@ -32,8 +33,9 @@ const DownloadButton = ({ text, filename, className = "" }) => {
         URL.revokeObjectURL(url);
     };
     return (
-        <button onClick={handleDownload} className={`bg-gray-700 hover:bg-gray-600 p-2 rounded shadow-lg transition-opacity ${className}`} title={`Download as ${filename}`}>
+        <button onClick={handleDownload} className={`inline-flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-3 py-1.5 rounded-md shadow-lg transition-colors ${className}`} title={`Download as ${filename}`}>
             <Download size={14} />
+            {label && <span>{label}</span>}
         </button>
     );
 };
@@ -460,7 +462,7 @@ const SourceDetails = ({ source, onClose }) => {
                         </button>
                         {showYaml && (
                             <div className="mt-2 p-2 border rounded-md bg-gray-900 text-white font-mono text-xs max-h-64 overflow-y-auto relative group">
-                                <CopyButton text={yamlContent} className="absolute top-2 right-2 opacity-0 group-hover:opacity-100" />
+                                <CopyButton text={yamlContent} className="absolute top-2 right-2" />
                                 <pre>{isLoadingYaml ? 'Loading...' : yamlContent}</pre>
                             </div>
                         )}
@@ -665,7 +667,7 @@ const OvaSourceDetails = ({ source, onClose }) => {
                         </button>
                         {showYaml && (
                             <div className="mt-2 p-2 border rounded-md bg-gray-900 text-white font-mono text-xs max-h-64 overflow-y-auto relative group">
-                                <CopyButton text={yamlContent} className="absolute top-2 right-2 opacity-0 group-hover:opacity-100" />
+                                <CopyButton text={yamlContent} className="absolute top-2 right-2" />
                                 <pre>{isLoadingYaml ? 'Loading...' : yamlContent}</pre>
                             </div>
                         )}
@@ -684,7 +686,7 @@ const PlanDetails = ({ plan, onClose }) => {
     const [yamlContent, setYamlContent] = useState('');
     const [showDebug, setShowDebug] = useState(null); // 'logs' or 'yaml'
     const [isLoadingDebug, setIsLoadingDebug] = useState(false);
-    const [onlyRelevantLogs, setOnlyRelevantLogs] = useState(true);
+    const [onlyRelevantLogs, setOnlyRelevantLogs] = useState(false);
     const [followLogs, setFollowLogs] = useState(true);
     const followLogsRef = useRef(true);
     const [fontSize, setFontSize] = useState(10); // px
@@ -969,7 +971,7 @@ const PlanDetails = ({ plan, onClose }) => {
                         </div>
                         {showDebug && (
                             <div className="mt-4 p-4 border rounded-md bg-gray-900 text-white font-mono max-h-96 overflow-y-auto shadow-inner group relative" style={{ fontSize: `${fontSize}px` }}>
-                                <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100">
+                                <div className="absolute top-2 right-2 flex gap-2">
                                     <DownloadButton text={showDebug === 'logs' ? logs : yamlContent} filename={showDebug === 'logs' ? `${plan.metadata.name}-logs.txt` : `${plan.metadata.name}.yaml`} />
                                     <CopyButton text={showDebug === 'logs' ? logs : yamlContent} />
                                 </div>
@@ -1930,58 +1932,24 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities, forkliftAvaila
         }
 
         // --- VM Import Controller Plan Creation ---
-        const originalVmName = slugify(sourceType === 'ova' ? ovaVmName : selectedVm?.name || '');
-        const folder = (sourceType !== 'ova' && selectedVm?.folder && selectedVm.folder !== '/') ? selectedVm.folder : undefined;
-
-        // Construct the plan object
-        const plan = {
-            apiVersion: "migration.harvesterhci.io/v1beta1",
-            kind: "VirtualMachineImport",
-            metadata: {
-                name: slugify(planName),
-                namespace: finalTargetNamespace,
-                annotations: sourceType === 'vmware' && selectedVm ? {
-                    'migration.harvesterhci.io/original-cpu': selectedVm.cpu?.toString() || '0',
-                    'migration.harvesterhci.io/original-memory-mb': selectedVm.memoryMB?.toString() || '0',
-                    'migration.harvesterhci.io/original-disk-size-gb': selectedVm.diskSizeGB?.toString() || '0',
-                    'migration.harvesterhci.io/original-disks': JSON.stringify(selectedVm.disks || []),
-                    'migration.harvesterhci.io/original-networks': JSON.stringify(selectedVm.networks || []),
-                } : undefined
-            },
-            spec: {
-                virtualMachineName: originalVmName,
-                sourceCluster: {
-                    name: sourceName,
-                    namespace: sourceNamespace,
-                    kind: sourceType === 'ova' ? "OvaSource" : "VmwareSource",
-                    apiVersion: "migration.harvesterhci.io/v1beta1",
-                },
-                storageClass: storageClass,
-                networkMapping: Object.entries(networkMappings).map(([key, value]) => ({
-                    sourceNetwork: key,
-                    destinationNetwork: `${value}`,
-                    networkInterfaceModel: capabilities.hasAdvancedPower ? (networkModels[key] || undefined) : undefined
-                })),
-                folder: folder,
-            }
-        };
-
-        // Only attach advanced fields if the cluster supports them
-        if (capabilities.hasAdvancedPower) {
-            plan.spec.forcePowerOff = forcePowerOff;
-            if (shutdownTimeout) {
-                plan.spec.gracefulShutdownTimeoutSeconds = parseInt(shutdownTimeout);
-            }
-            if (defaultModel) {
-                plan.spec.defaultNetworkInterfaceModel = defaultModel;
-            }
-
-            // NEW: Attach v1.6 fields
-            plan.spec.skipPreflightChecks = skipPreflight;
-            if (diskBus) {
-                plan.spec.defaultDiskBusType = diskBus;
-            }
-        }
+        const plan = buildVmicPlan({
+            sourceType,
+            ovaVmName,
+            selectedVm,
+            planName,
+            targetNamespace: finalTargetNamespace,
+            sourceName,
+            sourceNamespace,
+            storageClass,
+            networkMappings,
+            networkModels,
+            capabilities,
+            forcePowerOff,
+            shutdownTimeout,
+            defaultModel,
+            skipPreflight,
+            diskBus,
+        });
 
         onCreatePlan(plan);
     };
@@ -2698,6 +2666,97 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities, forkliftAvaila
     );
 };
 
+const SupportBundleCard = () => {
+    const [includeInventory, setIncludeInventory] = useState(false);
+    const [anonymize, setAnonymize] = useState(false);
+    const [generating, setGenerating] = useState(false);
+    const [error, setError] = useState(null);
+
+    const handleGenerate = async () => {
+        const params = new URLSearchParams();
+        if (includeInventory) params.set('inventory', 'true');
+        if (anonymize) params.set('anonymize', 'true');
+        const qs = params.toString();
+        const url = `/api/v1/support-bundle${qs ? `?${qs}` : ''}`;
+
+        setGenerating(true);
+        setError(null);
+        try {
+            const resp = await fetch(url);
+            if (!resp.ok) throw new Error(`Server returned ${resp.status}`);
+            const blob = await resp.blob();
+            const disposition = resp.headers.get('Content-Disposition') || '';
+            const match = disposition.match(/filename="?([^"]+)"?/);
+            const filename = match ? match[1] : 'vm-import-support.tar.gz';
+            const objUrl = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = objUrl;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(objUrl);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setGenerating(false);
+        }
+    };
+
+    return (
+        <div className="bg-card shadow-md rounded-lg p-6 border border-main">
+            <h3 className="text-lg font-semibold mb-2 text-main flex items-center">
+                <Download size={18} className="mr-2 text-blue-600" /> Support Bundle
+            </h3>
+            <p className="text-sm text-secondary mb-4">
+                Generate a redacted <code>.tar.gz</code> snapshot of cluster capabilities, migration plans (with
+                status conditions), network/storage maps, and source/provider definitions — useful for
+                troubleshooting and for reproducing issues from a customer's environment. Secret values are
+                never included.
+            </p>
+            <div className="space-y-2 mb-4">
+                <label className="flex items-center text-sm text-main">
+                    <input
+                        type="checkbox"
+                        className="form-checkbox text-blue-600 mr-2"
+                        checked={includeInventory}
+                        disabled={generating}
+                        onChange={e => setIncludeInventory(e.target.checked)}
+                    />
+                    Include vCenter inventory
+                    <span className="text-secondary ml-1">(slower; fetches live inventory for every source)</span>
+                </label>
+                <label className="flex items-center text-sm text-main">
+                    <input
+                        type="checkbox"
+                        className="form-checkbox text-blue-600 mr-2"
+                        checked={anonymize}
+                        disabled={generating}
+                        onChange={e => setAnonymize(e.target.checked)}
+                    />
+                    Anonymize inventory names
+                    <span className="text-secondary ml-1">(hashes VM/folder/network names; name-specific bugs won't reproduce)</span>
+                </label>
+            </div>
+            {error && (
+                <p className="text-sm text-red-500 mb-3 flex items-center gap-1">
+                    <AlertTriangle size={14} /> {error}
+                </p>
+            )}
+            <button
+                onClick={handleGenerate}
+                disabled={generating}
+                className="inline-flex items-center bg-blue-500 hover:bg-blue-600 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold py-2 px-4 rounded-md transition-colors"
+            >
+                {generating
+                    ? <><Loader size={16} className="mr-2 animate-spin" /> Generating…</>
+                    : <><Download size={16} className="mr-2" /> Generate Support Bundle</>
+                }
+            </button>
+        </div>
+    );
+};
+
 const AboutPage = () => (
     <div className="space-y-8">
         <div className="flex justify-between items-center mb-6">
@@ -2766,7 +2825,7 @@ const AboutPage = () => (
             <style>{`.github-corner:hover .octo-arm{animation:octocat-wave 560ms ease-in-out}@keyframes octocat-wave{0%,100%{transform:rotate(0)}20%,60%{transform:rotate(-25deg)}40%,80%{transform:rotate(10deg)}}@media (max-width:500px){.github-corner:hover .octo-arm{animation:none}.github-corner .octo-arm{animation:octocat-wave 560ms ease-in-out}}`}</style>
 
             <h2 className="text-xl font-semibold mb-4 z-10 relative text-main">Harvester VM Import UI</h2>
-            <p className="mb-2 z-10 relative text-main"><strong>Version:</strong> 1.7.0</p>
+            <p className="mb-2 z-10 relative text-main"><strong>Version:</strong> 1.7.2</p>
             <p className="mb-2 z-10 relative text-secondary font-medium">This UI provides a user-friendly interface for migrating virtual machines into Harvester / SUSE Virtualization clusters. It supports two migration engines: the native VM Import Controller and the Forklift (Konveyor) project, with sources including VMware vCenter, standalone ESXi hosts, and OVA/OVF files on NFS shares.</p>
             <p className="mb-6 italic text-sm text-secondary z-10 relative mt-2 border-l-4 border-blue-400 pl-3">Based off of an idea by Erico Mendonca (erico.mendonca@suse.com)</p>
 
@@ -2818,6 +2877,8 @@ const AboutPage = () => (
                 </div>
             </div>
         </div>
+
+        <SupportBundleCard />
     </div>
 );
 
@@ -3118,7 +3179,7 @@ const ForkliftProviderDetails = ({ provider, onClose }) => {
                         </button>
                         {showYaml && (
                             <div className="mt-2 p-2 border rounded-md bg-gray-900 text-white font-mono text-xs max-h-64 overflow-y-auto relative group">
-                                <CopyButton text={yamlContent} className="absolute top-2 right-2 opacity-0 group-hover:opacity-100" />
+                                <CopyButton text={yamlContent} className="absolute top-2 right-2" />
                                 <pre>{isLoadingYaml ? 'Loading...' : yamlContent}</pre>
                             </div>
                         )}
@@ -3319,7 +3380,7 @@ const ForkliftPlanDetails = ({ plan, onClose, onRunMigration, forkliftNamespace 
     const [yamlObject, setYamlObject] = useState('plan');
     const [debugMode, setDebugMode] = useState('logs'); // 'logs' or 'yaml'
     const [isLoadingDebug, setIsLoadingDebug] = useState(false);
-    const [onlyRelevantLogs, setOnlyRelevantLogs] = useState(true);
+    const [onlyRelevantLogs, setOnlyRelevantLogs] = useState(false);
     const [errorsOnlyLogs, setErrorsOnlyLogs] = useState(false);
     const [followLogs, setFollowLogs] = useState(true);
     const followLogsRef = useRef(true);
@@ -4043,7 +4104,7 @@ const ForkliftPlanDetails = ({ plan, onClose, onRunMigration, forkliftNamespace 
                 </div>
             )}
             <div className="p-4 border rounded-md bg-gray-900 text-white font-mono max-h-96 overflow-y-auto shadow-inner group relative" style={{ fontSize: `${fontSize}px` }}>
-                <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100">
+                <div className="absolute top-2 right-2 flex gap-2">
                     <DownloadButton text={debugMode === 'logs' ? logs : yamlContent} filename={debugMode === 'logs' ? `${plan.metadata.name}-logs.txt` : `${plan.metadata.name}-${yamlObject}.yaml`} />
                     <CopyButton text={debugMode === 'logs' ? logs : yamlContent} />
                 </div>
