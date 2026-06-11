@@ -1,0 +1,83 @@
+{{- if .Values.rbac.create -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "vm-import-ui.fullname" . }}
+  labels:
+    {{- include "vm-import-ui.labels" . | nindent 4 }}
+rules:
+
+  # ── Core resources ──────────────────────────────────────────────────────────
+  - apiGroups: [""]
+    resources: ["namespaces", "nodes"]
+    verbs: ["get", "list", "watch"]
+
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch"]
+
+  - apiGroups: [""]
+    resources: ["services", "configmaps", "events"]
+    verbs: ["get", "list", "watch"]
+
+  # Secrets: needed for provider credentials (vCenter passwords, CA certs, etc.)
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # PVCs / PVs: data volumes land here during migration
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims", "persistentvolumes"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # ── Storage ─────────────────────────────────────────────────────────────────
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses"]
+    verbs: ["get", "list", "watch"]
+
+  # ── KubeVirt (virtual machines) ─────────────────────────────────────────────
+  - apiGroups: ["kubevirt.io"]
+    resources:
+      - virtualmachines
+      - virtualmachineinstances
+      - virtualmachineinstancemigrations
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # ── CDI (containerized data importer — disk images) ─────────────────────────
+  - apiGroups: ["cdi.kubevirt.io"]
+    resources: ["datavolumes", "datasources"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # ── Harvester-specific resources ─────────────────────────────────────────────
+  # harvesterhci.io covers VirtualMachineImage, KeyPair, Setting, etc.
+  - apiGroups: ["harvesterhci.io"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # ── VM Import Controller (native Harvester migration engine) ─────────────────
+  # Resources: VmwareSource, VirtualMachineImport, VirtualMachineImportPlan, etc.
+  - apiGroups: ["migration.harvesterhci.io"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # ── Forklift / Konveyor MTV (second migration engine) ────────────────────────
+  - apiGroups: ["forklift.konveyor.io"]
+    resources:
+      - providers
+      - plans
+      - migrations
+      - networkmaps
+      - storagemaps
+      - hosts
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # ── Multus network attachments (for network mapping) ─────────────────────────
+  - apiGroups: ["k8s.cni.cncf.io"]
+    resources: ["network-attachment-definitions"]
+    verbs: ["get", "list", "watch"]
+
+  # ── Apps (informational — pod controller lookups) ────────────────────────────
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets"]
+    verbs: ["get", "list", "watch"]
+{{- end }}

@@ -89,6 +89,35 @@ podman run -p 8080:8080 \
 
 ---
 
+## In-Cluster Deployment (Helm)
+
+To run the UI **inside** the Harvester cluster (no local kubeconfig needed — the pod
+authenticates with its own ServiceAccount), use the Helm chart in [`charts/vm-import-ui`](charts/vm-import-ui):
+
+```bash
+helm install vm-import-ui ./charts/vm-import-ui \
+  --namespace vm-import-ui --create-namespace \
+  --set service.nodePort=32000 \
+  --set image.tag=latest
+```
+
+Then browse to `http://<any-node-ip>:32000` (the `helm install` output prints the exact URL).
+
+The chart creates a Deployment, a NodePort Service, and a ServiceAccount with a ClusterRole
+granting access to Harvester, KubeVirt, CDI, the VM Import Controller, and Forklift resources.
+
+| Common value | Default | Purpose |
+|--------------|---------|---------|
+| `image.tag` | chart `appVersion` | Image tag to deploy (`latest` for the newest build) |
+| `service.nodePort` | `32000` | Fixed NodePort (must be 30000–32767; high in range to avoid collisions) |
+| `service.type` | `NodePort` | Service type (`ClusterIP`/`LoadBalancer` also supported) |
+| `env.logLevel` | `info` | `debug` \| `info` \| `warn` \| `error` |
+| `rbac.create` | `true` | Create the ClusterRole + binding |
+
+Package a versioned tarball with `helm package charts/vm-import-ui`.
+
+---
+
 ## Screenshots — VM Import Controller
 
 Create a vCenter source:

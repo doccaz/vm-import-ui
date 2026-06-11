@@ -1,0 +1,35 @@
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Harvester VM Import UI — {{ .Release.Name }}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+The UI is exposed via NodePort.  To find the URL:
+
+  NODE_IP=$(kubectl get nodes \
+    --namespace {{ .Release.Namespace }} \
+    -o jsonpath="{.items[0].status.addresses[?(@.type=='InternalIP')].address}")
+
+  NODE_PORT=$(kubectl get svc {{ include "vm-import-ui.fullname" . }} \
+    --namespace {{ .Release.Namespace }} \
+    -o jsonpath='{.spec.ports[0].nodePort}')
+
+  echo "http://${NODE_IP}:${NODE_PORT}"
+
+━━ Authentication ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+The pod authenticates to the Harvester API using its ServiceAccount token.
+The ClusterRole grants access to:
+
+  • Harvester / KubeVirt resources
+  • VM Import Controller (migration.harvesterhci.io)
+  • Forklift / MTV (forklift.konveyor.io)
+  • Multus network attachments
+
+If you see 403 errors for a resource, check the ClusterRole in
+templates/clusterrole.yaml and add the missing apiGroup/resource.
+
+━━ Troubleshooting ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  kubectl logs -n {{ .Release.Namespace }} \
+    deployment/{{ include "vm-import-ui.fullname" . }}
+
+Set logLevel: debug in values.yaml for verbose output.

@@ -1,0 +1,131 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "vm-import-ui.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vm-import-ui.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "vm-import-ui.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "vm-import-ui.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "vm-import-ui.serviceAccountName" . }}
+      automountServiceAccountToken: true
+
+      initContainers:
+        - name: generate-kubeconfig
+          image: registry.suse.com/bci/bci-base:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+              CA_DATA=$(base64 -w 0 /var/run/secrets/kubernetes.io/serviceaccount/ca.crt)
+              mkdir -p /var/kubeconfig
+              cat > /var/kubeconfig/config << KUBEEOF
+              apiVersion: v1
+              kind: Config
+              clusters:
+              - cluster:
+                  certificate-authority-data: ${CA_DATA}
+                  server: https://kubernetes.default.svc
+                name: in-cluster
+              contexts:
+              - context:
+                  cluster: in-cluster
+                  user: in-cluster
+                name: in-cluster
+              current-context: in-cluster
+              users:
+              - name: in-cluster
+                user:
+                  tokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+              KUBEEOF
+              chmod 644 /var/kubeconfig/config
+              echo "kubeconfig written:"
+              cat /var/kubeconfig/config
+          volumeMounts:
+            - name: kubeconfig-dir
+              mountPath: /var/kubeconfig
+
+      containers:
+        - name: vm-import-ui
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+
+          env:
+            # Blank out the auto-injected service-discovery env vars so that
+            # client-go's rest.InClusterConfig() returns ErrNotInCluster and
+            # the app falls through to use KUBECONFIG instead.
+            # User-defined env vars are placed before auto-injected ones in the
+            # container env, so these empty values take precedence.
+            - name: KUBERNETES_SERVICE_HOST
+              value: ""
+            - name: KUBERNETES_SERVICE_PORT
+              value: ""
+            # Our clean, init-container-generated kubeconfig with the CA cert
+            # embedded and no insecure flag — the app reads this as its only
+            # config source once in-cluster detection is disabled above.
+            - name: KUBECONFIG
+              value: /var/kubeconfig/config
+            - name: LOG_LEVEL
+              value: {{ .Values.env.logLevel | quote }}
+            - name: UI_PATH
+              value: {{ .Values.env.uiPath | quote }}
+            - name: USE_MOCK_DATA
+              value: {{ .Values.env.useMockData | quote }}
+
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 30
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            failureThreshold: 3
+
+          volumeMounts:
+            - name: kubeconfig-dir
+              mountPath: /var/kubeconfig
+              readOnly: true
+
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+
+      volumes:
+        - name: kubeconfig-dir
+          emptyDir: {}
+
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

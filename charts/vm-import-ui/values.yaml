@@ -1,0 +1,56 @@
+# Default values for vm-import-ui.
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/doccaz/vm-import-ui
+  pullPolicy: IfNotPresent
+  # Overrides the appVersion from Chart.yaml when set
+  tag: ""
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # Create a dedicated ServiceAccount for the pod
+  create: true
+  # Use a custom name; defaults to the chart fullname
+  name: ""
+  annotations: {}
+
+rbac:
+  # Create ClusterRole + ClusterRoleBinding granting the app access to
+  # Harvester, KubeVirt, CDI, VM Import Controller, and Forklift resources
+  create: true
+
+service:
+  type: NodePort
+  port: 8080
+  # Fixed NodePort. Kubernetes only allows 30000-32767 for NodePorts, so a host
+  # firewall must permit that range regardless of the value chosen. 32000 sits high
+  # in the range, away from the low/round ports (30000, 30080, 30443) that other
+  # tools commonly grab, minimising collisions. Set to "" to let Kubernetes pick one.
+  nodePort: 32000
+
+env:
+  # Log verbosity: debug | info | warn | error
+  logLevel: info
+  # Internal path to the React build — matches Dockerfile COPY destination
+  uiPath: /ui
+  # Set to "true" to run in dev/mock mode without a real cluster
+  useMockData: "false"
+
+# Resource requests and limits (leave empty to use cluster defaults)
+resources: {}
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # limits:
+  #   cpu: 500m
+  #   memory: 256Mi
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

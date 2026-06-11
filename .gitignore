@@ -36,6 +36,8 @@ Thumbs.db
 *.yaml
 !.github/**/*.yaml
 !.github/**/*.yml
+# Helm chart manifests are not kubeconfigs — keep them tracked
+!charts/**/*.yaml
 
 # --- Container build artifacts ---
 *.tar
