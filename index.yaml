@@ -3,11 +3,11 @@ entries:
   vm-import-ui:
   - apiVersion: v2
     appVersion: 1.8.0
-    created: "2026-06-11T15:31:17.978430906Z"
+    created: "2026-06-11T17:06:03.239515788Z"
     description: 'Web-based UI for importing virtual machines into Harvester / SUSE
       Virtualization clusters. Supports both the native VM Import Controller and Forklift
       (Konveyor MTV) migration engines. '
-    digest: 14fac63944055b99331eb88114815cbbc2aa891cb2c3dda63117353f2830b9bd
+    digest: fe9e83c9c1297bb7d1f1812eee52727a4821a6d73afb16840856243e7c9255c1
     home: https://github.com/doccaz/vm-import-ui
     keywords:
     - harvester
@@ -25,4 +25,4 @@ entries:
     urls:
     - https://doccaz.github.io/vm-import-ui/vm-import-ui-0.1.0.tgz
     version: 0.1.0
-generated: "2026-06-11T15:31:17.977853208Z"
+generated: "2026-06-11T17:06:03.238894437Z"
