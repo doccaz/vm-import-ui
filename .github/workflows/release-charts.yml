@@ -1,10 +1,14 @@
 name: Release Helm Chart
 
 # Publishes charts/ as a Helm repo served from GitHub Pages.
-# chart-releaser packages each chart, creates a GitHub Release (tagged
-# <chart>-<version>) with the .tgz asset, and updates index.yaml on the
-# gh-pages branch. A chart version is only released once — bump the
-# `version` in charts/vm-import-ui/Chart.yaml to publish a new one.
+#
+# Charts are packaged and committed directly to the gh-pages branch (.tgz +
+# index.yaml) — NOT as GitHub Releases. This keeps the Releases page reserved
+# for application versions (vX.Y.Z) and avoids confusing chart versions
+# (e.g. 0.1.0) with app versions (e.g. 1.8.0).
+#
+# The repo is consumable with:
+#   helm repo add vm-import-ui https://doccaz.github.io/vm-import-ui
 on:
   push:
     branches:
@@ -13,31 +17,52 @@ on:
       - 'charts/**'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   release:
-    # GitHub-hosted runner (public repo → free); avoids self-hosted git/network setup
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Configure Git
-        run: |
-          git config user.name "$GITHUB_ACTOR"
-          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
-
       - name: Install Helm
         uses: azure/setup-helm@v4
 
-      - name: Run chart-releaser
-        uses: helm/chart-releaser-action@v1.6.0
-        with:
-          # Don't fail if a chart version's release already exists — just
-          # (re)generate index.yaml on gh-pages. Lets re-runs be idempotent.
-          skip_existing: true
+      - name: Package charts and publish to gh-pages
         env:
-          CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+          PAGES_URL: https://doccaz.github.io/vm-import-ui
+        run: |
+          set -euo pipefail
+          git config user.name "$GITHUB_ACTOR"
+          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+
+          # Check out gh-pages in a separate worktree so historical .tgz are kept
+          git fetch origin gh-pages
+          git worktree add /tmp/ghp gh-pages
+
+          # Package every chart into the gh-pages worktree
+          for chart in charts/*/; do
+            [ -f "$chart/Chart.yaml" ] || continue
+            helm package "$chart" --destination /tmp/ghp
+          done
+
+          # (Re)generate the repo index. Merge with the existing one when present
+          # so original "created" timestamps for prior versions are preserved.
+          if [ -f /tmp/ghp/index.yaml ]; then
+            helm repo index /tmp/ghp --url "$PAGES_URL" --merge /tmp/ghp/index.yaml
+          else
+            helm repo index /tmp/ghp --url "$PAGES_URL"
+          fi
+
+          cd /tmp/ghp
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No chart changes to publish."
+          else
+            git commit -m "Publish Helm charts ($(date -u +%FT%TZ))"
+            git push origin gh-pages
+          fi
