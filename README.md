@@ -185,7 +185,15 @@ cd frontend && npx react-scripts test --watchAll=false
 
 ---
 
-## Latest Release (v1.7.2)
+## Latest Release (v1.8.0)
+
+- **Edit VMIC migration plans**: the VM Import Controller plans table now offers an Edit action (the Play button, which VMIC never needed, was removed). Edit a plan's VM name, folder, storage class, network mapping, and advanced options (force power off, skip preflight, shutdown timeout, default NIC model, disk bus) to fix an invalid plan in place
+- **Recover invalid plans without recreating**: saving an edit clears `status.importStatus` so the vm-import-controller re-runs preflight — previously an invalid plan was a dead end (the controller treats `virtualMachineImportInvalid` as terminal)
+- **Network mapping editing** reads source NICs from the plan itself (no vCenter round-trip) and warns when a source NIC is left unmapped, which VMIC rejects
+- **Untagged networks** (e.g. `local-network`) now appear in the network-mapping dropdowns alongside VLAN networks
+- **VM name pre-validation**: the create wizard and edit modal warn when a source VM name won't lowercase to a valid Kubernetes name (e.g. spaces/dots) — VMIC derives the destination name from the source name and would otherwise fail with a cryptic invalid status
+
+### v1.7.2
 
 - **Support Bundle**: one-click diagnostics archive from the About page — redacted `.tar.gz` with cluster state, all migration/provider CRs, conditions, and optional live vCenter inventory; secret values never included; anonymization option available
 - Support bundle button shows a loading spinner while the archive is being assembled and surfaces errors inline
