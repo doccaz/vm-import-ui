@@ -3,6 +3,7 @@ name: Docker Image CI to GHCR
 on:
   push:
     branches: [ "master" ]
+    tags: [ "v*" ]
 
 jobs:
   build:
@@ -29,6 +30,17 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
 
+    # Derive image tags: ":latest" on master pushes, ":X.Y.Z" and ":X.Y" on v* tag pushes
+    - name: Extract image metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ghcr.io/doccaz/vm-import-ui
+        tags: |
+          type=raw,value=latest,enable={{is_default_branch}}
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+
     # Combine both platforms into a single build and push step
     - name: Build and push Multi-Platform Image
       uses: docker/build-push-action@v6
@@ -37,7 +49,8 @@ jobs:
         push: true
         # List all target platforms here
         platforms: linux/amd64,linux/arm64
-        tags: ghcr.io/doccaz/vm-import-ui:latest
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
         # Optional but highly recommended: add caching to speed up builds
         cache-from: type=gha,scope=build-vm-import-ui
         cache-to: type=gha,scope=build-vm-import-ui,mode=max
