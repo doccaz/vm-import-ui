@@ -44,10 +44,19 @@ type VirtualMachineImportStatus struct {
 	ImportStatus string             `json:"importStatus,omitempty"`
 }
 
-// UpdatePlanPayload is the JSON payload for patching editable fields on a VMIC plan
+// UpdatePlanPayload is the JSON payload for patching editable fields on a VMIC plan.
+// Every field is a pointer so a nil value means "leave unchanged", while a provided
+// value (including empty string / false / 0) is applied — empty strings and zero
+// timeouts clear the corresponding spec field.
 type UpdatePlanPayload struct {
-	VirtualMachineName string `json:"virtualMachineName,omitempty"`
-	StorageClass       string `json:"storageClass,omitempty"`
+	VirtualMachineName             *string `json:"virtualMachineName,omitempty"`
+	StorageClass                   *string `json:"storageClass,omitempty"`
+	Folder                         *string `json:"folder,omitempty"`
+	ForcePowerOff                  *bool   `json:"forcePowerOff,omitempty"`
+	GracefulShutdownTimeoutSeconds *int64  `json:"gracefulShutdownTimeoutSeconds,omitempty"`
+	DefaultNetworkInterfaceModel   *string `json:"defaultNetworkInterfaceModel,omitempty"`
+	SkipPreflightChecks            *bool   `json:"skipPreflightChecks,omitempty"`
+	DefaultDiskBusType             *string `json:"defaultDiskBusType,omitempty"`
 }
 
 // VirtualMachineImport is the Schema for the virtualmachineimports API

@@ -293,11 +293,36 @@ func UpdatePlanHandler(clients *K8sClients) http.HandlerFunc {
 			return
 		}
 
-		if payload.VirtualMachineName != "" {
-			unstructured.SetNestedField(item.Object, payload.VirtualMachineName, "spec", "virtualMachineName")
+		// setOrClearString sets a spec field to a non-empty value or removes it when empty.
+		setOrClearString := func(val *string, path ...string) {
+			if val == nil {
+				return
+			}
+			if *val == "" {
+				unstructured.RemoveNestedField(item.Object, path...)
+			} else {
+				unstructured.SetNestedField(item.Object, *val, path...)
+			}
 		}
-		if payload.StorageClass != "" {
-			unstructured.SetNestedField(item.Object, payload.StorageClass, "spec", "storageClass")
+
+		setOrClearString(payload.VirtualMachineName, "spec", "virtualMachineName")
+		setOrClearString(payload.StorageClass, "spec", "storageClass")
+		setOrClearString(payload.Folder, "spec", "folder")
+		setOrClearString(payload.DefaultNetworkInterfaceModel, "spec", "defaultNetworkInterfaceModel")
+		setOrClearString(payload.DefaultDiskBusType, "spec", "defaultDiskBusType")
+
+		if payload.ForcePowerOff != nil {
+			unstructured.SetNestedField(item.Object, *payload.ForcePowerOff, "spec", "forcePowerOff")
+		}
+		if payload.SkipPreflightChecks != nil {
+			unstructured.SetNestedField(item.Object, *payload.SkipPreflightChecks, "spec", "skipPreflightChecks")
+		}
+		if payload.GracefulShutdownTimeoutSeconds != nil {
+			if *payload.GracefulShutdownTimeoutSeconds == 0 {
+				unstructured.RemoveNestedField(item.Object, "spec", "gracefulShutdownTimeoutSeconds")
+			} else {
+				unstructured.SetNestedField(item.Object, *payload.GracefulShutdownTimeoutSeconds, "spec", "gracefulShutdownTimeoutSeconds")
+			}
 		}
 
 		updatedItem, err := clients.Dynamic.Resource(vmiGVR).Namespace(namespace).Update(context.TODO(), item, metav1.UpdateOptions{})
