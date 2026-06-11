@@ -352,7 +352,23 @@ func UpdatePlanHandler(clients *K8sClients) http.HandlerFunc {
 			return
 		}
 
-		respondWithJSON(w, http.StatusOK, updatedItem)
+		// The vm-import-controller treats virtualMachineImportInvalid (and other
+		// terminal states) as final: its reconcile switch returns early and never
+		// re-runs preflight on a spec change. Only an empty status hits the `case ""`
+		// branch that re-validates. So after saving the edited spec we clear
+		// status.importStatus via the status subresource to force re-reconciliation;
+		// without this an edit silently leaves the plan stuck in its old state.
+		unstructured.SetNestedField(updatedItem.Object, "", "status", "importStatus")
+		finalItem, err := clients.Dynamic.Resource(vmiGVR).Namespace(namespace).UpdateStatus(context.TODO(), updatedItem, metav1.UpdateOptions{})
+		if err != nil {
+			// Spec saved but status reset failed — the plan may stay in its terminal
+			// state until recreated. Surface a warning rather than failing the edit.
+			log.Warnf("Plan %s/%s spec updated but status reset failed (plan may remain invalid until recreated): %v", namespace, name, err)
+			respondWithJSON(w, http.StatusOK, updatedItem)
+			return
+		}
+
+		respondWithJSON(w, http.StatusOK, finalItem)
 	}
 }
 
