@@ -3020,7 +3020,7 @@ const AboutPage = () => (
             <style>{`.github-corner:hover .octo-arm{animation:octocat-wave 560ms ease-in-out}@keyframes octocat-wave{0%,100%{transform:rotate(0)}20%,60%{transform:rotate(-25deg)}40%,80%{transform:rotate(10deg)}}@media (max-width:500px){.github-corner:hover .octo-arm{animation:none}.github-corner .octo-arm{animation:octocat-wave 560ms ease-in-out}}`}</style>
 
             <h2 className="text-xl font-semibold mb-4 z-10 relative text-main">Harvester VM Import UI</h2>
-            <p className="mb-2 z-10 relative text-main"><strong>Version:</strong> 1.8.0</p>
+            <p className="mb-2 z-10 relative text-main"><strong>Version:</strong> 1.8.1</p>
             <p className="mb-2 z-10 relative text-secondary font-medium">This UI provides a user-friendly interface for migrating virtual machines into Harvester / SUSE Virtualization clusters. It supports two migration engines: the native VM Import Controller and the Forklift (Konveyor) project, with sources including VMware vCenter, standalone ESXi hosts, and OVA/OVF files on NFS shares.</p>
             <p className="mb-6 italic text-sm text-secondary z-10 relative mt-2 border-l-4 border-blue-400 pl-3">Based off of an idea by Erico Mendonca (erico.mendonca@suse.com)</p>
 

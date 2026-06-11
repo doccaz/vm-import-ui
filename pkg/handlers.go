@@ -127,6 +127,9 @@ type CapabilityConfig struct {
 // so callers can choose to surface defaults (the HTTP handler) or record the
 // failure (the support bundle).
 func gatherCapabilities(ctx context.Context, clients *K8sClients) (CapabilityConfig, error) {
+	if clients == nil || clients.Dynamic == nil {
+		return CapabilityConfig{HarvesterVersion: "unknown", HasAdvancedPower: false}, fmt.Errorf("kubernetes client unavailable")
+	}
 	setting, err := clients.Dynamic.Resource(settingsGVR).Get(ctx, "server-version", metav1.GetOptions{})
 	if err != nil {
 		return CapabilityConfig{HarvesterVersion: "unknown", HasAdvancedPower: false}, err
