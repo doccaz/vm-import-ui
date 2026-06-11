@@ -44,6 +44,12 @@ type VirtualMachineImportStatus struct {
 	ImportStatus string             `json:"importStatus,omitempty"`
 }
 
+// UpdatePlanPayload is the JSON payload for patching editable fields on a VMIC plan
+type UpdatePlanPayload struct {
+	VirtualMachineName string `json:"virtualMachineName,omitempty"`
+	StorageClass       string `json:"storageClass,omitempty"`
+}
+
 // VirtualMachineImport is the Schema for the virtualmachineimports API
 type VirtualMachineImport struct {
 	metav1.TypeMeta   `json:",inline"`

@@ -46,6 +46,7 @@ func main() {
 	api.HandleFunc("/vcenter/vm/{namespace}/{name}/mac", HandleUpdateVMMAC(k8sClients)).Methods("POST")
 	api.HandleFunc("/plans", CreatePlanHandler(k8sClients)).Methods("POST")
 	api.HandleFunc("/plans", ListPlansHandler(k8sClients)).Methods("GET")
+	api.HandleFunc("/plans/{namespace}/{name}", UpdatePlanHandler(k8sClients)).Methods("PUT")
 	api.HandleFunc("/plans/{namespace}/{name}", DeletePlanHandler(k8sClients)).Methods("DELETE")
 	api.HandleFunc("/plans/{namespace}/{name}/run", RunPlanHandler(k8sClients)).Methods("POST")
 	api.HandleFunc("/plans/{namespace}/{name}/logs", HandleGetPlanLogs(k8sClients)).Methods("GET")

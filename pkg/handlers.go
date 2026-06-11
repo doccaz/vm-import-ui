@@ -275,6 +275,41 @@ func DeletePlanHandler(clients *K8sClients) http.HandlerFunc {
 	}
 }
 
+func UpdatePlanHandler(clients *K8sClients) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		namespace := vars["namespace"]
+		name := vars["name"]
+
+		var payload UpdatePlanPayload
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			respondWithError(w, http.StatusBadRequest, "Invalid request body")
+			return
+		}
+
+		item, err := clients.Dynamic.Resource(vmiGVR).Namespace(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+		if err != nil {
+			respondWithError(w, http.StatusNotFound, "Plan not found: "+err.Error())
+			return
+		}
+
+		if payload.VirtualMachineName != "" {
+			unstructured.SetNestedField(item.Object, payload.VirtualMachineName, "spec", "virtualMachineName")
+		}
+		if payload.StorageClass != "" {
+			unstructured.SetNestedField(item.Object, payload.StorageClass, "spec", "storageClass")
+		}
+
+		updatedItem, err := clients.Dynamic.Resource(vmiGVR).Namespace(namespace).Update(context.TODO(), item, metav1.UpdateOptions{})
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "Failed to update plan: "+err.Error())
+			return
+		}
+
+		respondWithJSON(w, http.StatusOK, updatedItem)
+	}
+}
+
 func RunPlanHandler(clients *K8sClients) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)

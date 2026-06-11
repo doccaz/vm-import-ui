@@ -82,7 +82,7 @@ const getPlanStatus = (plan) => {
     return 'Pending';
 };
 
-const ResourceTable = ({ plans, onViewDetails, onDelete, onRun, sortConfig, onSort, expandedPlans, toggleExpand, selectedDisks, setSelectedDisks }) => {
+const ResourceTable = ({ plans, onViewDetails, onDelete, onEdit, sortConfig, onSort, expandedPlans, toggleExpand, selectedDisks, setSelectedDisks }) => {
     const renderStatusIcon = (status) => {
         if (status === 'True') return <CheckCircle2 size={14} className="text-green-500 mr-1" />;
         if (status === 'False') return <XCircle size={14} className="text-red-500 mr-1" />;
@@ -127,12 +127,13 @@ const ResourceTable = ({ plans, onViewDetails, onDelete, onRun, sortConfig, onSo
                                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2 pr-4">
                                         {(() => {
                                             const status = getPlanStatus(plan);
-                                            const canRun = status && !['Completed', 'Running', 'ImportCompleted'].includes(status);
-                                            return canRun ? (
-                                                <button onClick={() => onRun(plan)} title="Run Now" className="text-green-600 hover:text-green-800"><Play size={18} /></button>
-                                            ) : null;
+                                            const canEdit = !['Running', 'Completed', 'ImportCompleted', 'virtualMachineRunning'].includes(status);
+                                            return canEdit ? (
+                                                <button onClick={() => onEdit(plan)} title="Edit Plan" className="text-blue-600 hover:text-blue-800"><Edit size={18} /></button>
+                                            ) : (
+                                                <button title="Edit" className="text-secondary opacity-40 cursor-not-allowed"><Edit size={18} /></button>
+                                            );
                                         })()}
-                                        <button onClick={() => { }} title="Edit" className="text-secondary hover:text-main cursor-not-allowed"><Edit size={18} /></button>
                                         <button onClick={() => onDelete(plan)} title="Delete" className="text-red-600 hover:text-red-800"><Trash2 size={18} /></button>
                                         <button onClick={() => onViewDetails(plan)} className="text-blue-600 hover:text-blue-800">Details</button>
                                     </td>
@@ -345,6 +346,51 @@ const SourcesTable = ({ sources, onEdit, onDelete, onViewDetails, onExplore, sor
         </table>
     </div>
 );
+
+const EditVmicPlanModal = ({ plan, onCancel, onSave }) => {
+    const [vmName, setVmName] = useState(plan.spec?.virtualMachineName || '');
+    const [storageClass, setStorageClass] = useState(plan.spec?.storageClass || '');
+    const [storageClasses, setStorageClasses] = useState([]);
+
+    useEffect(() => {
+        fetch('/api/v1/harvester/storageclasses')
+            .then(res => res.json())
+            .then(data => setStorageClasses(data.map(sc => sc.metadata.name)))
+            .catch(() => {});
+    }, []);
+
+    return (
+        <div className="fixed inset-0 bg-opacity-50 flex justify-center items-center p-4 z-50">
+            <div className="bg-card rounded-lg shadow-xl w-full max-w-lg">
+                <div className="p-4 border-b">
+                    <h2 className="text-xl font-semibold">Edit Plan: {plan.metadata.name}</h2>
+                </div>
+                <div className="p-6 space-y-4">
+                    <div>
+                        <label className="block text-sm font-medium text-main">VM Name (source)</label>
+                        <input type="text" value={vmName} onChange={e => setVmName(e.target.value)} className="mt-1 block w-full form-input" />
+                        <p className="text-xs text-secondary mt-1">Case-sensitive VM name as it appears in vCenter</p>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-main">Storage Class</label>
+                        {storageClasses.length > 0 ? (
+                            <select value={storageClass} onChange={e => setStorageClass(e.target.value)} className="mt-1 block w-full form-input">
+                                <option value="">Select storage class</option>
+                                {storageClasses.map(sc => <option key={sc} value={sc}>{sc}</option>)}
+                            </select>
+                        ) : (
+                            <input type="text" value={storageClass} onChange={e => setStorageClass(e.target.value)} className="mt-1 block w-full form-input" />
+                        )}
+                    </div>
+                </div>
+                <div className="p-4 border-t flex justify-end space-x-2">
+                    <button onClick={onCancel} className="btn-secondary">Cancel</button>
+                    <button onClick={() => onSave(plan, { virtualMachineName: vmName, storageClass })} className="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-md">Save</button>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const SourceWizard = ({ onCancel, onSave, source }) => {
     const [name, setName] = useState('');
@@ -4238,6 +4284,7 @@ export default function App() {
     const [selectedPlan, setSelectedPlan] = useState(null);
     const [selectedSource, setSelectedSource] = useState(null);
     const [planToDelete, setPlanToDelete] = useState(null);
+    const [planToEdit, setPlanToEdit] = useState(null);
     const [sourceToEdit, setSourceToEdit] = useState(null);
     const [sourceToDelete, setSourceToDelete] = useState(null);
     const [showSourceWizard, setShowSourceWizard] = useState(false);
@@ -4581,6 +4628,25 @@ export default function App() {
         }
     };
 
+    const handleSaveVmicPlan = async (plan, updates) => {
+        try {
+            const response = await fetch(`/api/v1/plans/${plan.metadata.namespace}/${plan.metadata.name}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updates),
+            });
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error || 'Failed to update plan');
+            }
+            setPlanToEdit(null);
+            fetchPlans();
+        } catch (err) {
+            console.error("Failed to update plan:", err);
+            alert(`Error updating plan: ${err.message}`);
+        }
+    };
+
     const handleSaveSource = async (payload, isEdit) => {
         const url = isEdit ? `/api/v1/harvester/vmwaresources/${payload.namespace}/${payload.name}` : '/api/v1/harvester/vmwaresources';
         const method = isEdit ? 'PUT' : 'POST';
@@ -4820,7 +4886,7 @@ export default function App() {
                                     plans={sortedPlans}
                                     onViewDetails={handleViewDetails}
                                     onDelete={setPlanToDelete}
-                                    onRun={handleRunPlan}
+                                    onEdit={setPlanToEdit}
                                     sortConfig={plansSort}
                                     onSort={handleSort(setPlansSort)}
                                     expandedPlans={expandedPlans}
@@ -4906,6 +4972,7 @@ export default function App() {
                 {renderPage()}
             </div>
 
+            {planToEdit && <EditVmicPlanModal plan={planToEdit} onCancel={() => setPlanToEdit(null)} onSave={handleSaveVmicPlan} />}
             {showSourceWizard && <SourceWizard onCancel={() => { setShowSourceWizard(false); setSourceToEdit(null); }} onSave={handleSaveSource} source={sourceToEdit} />}
             {showOvaSourceWizard && <OvaSourceWizard onCancel={() => { setShowOvaSourceWizard(false); setOvaSourceToEdit(null); }} onSave={handleSaveOvaSource} source={ovaSourceToEdit} />}
 
