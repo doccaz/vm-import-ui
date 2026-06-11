@@ -1,9 +1,40 @@
 apiVersion: v1
 entries:
   vm-import-ui:
+  - annotations:
+      catalog.cattle.io/display-name: Harvester VM Import UI
+      catalog.cattle.io/kube-version: '>= 1.20.0-0'
+      catalog.cattle.io/namespace: vm-import-ui
+      catalog.cattle.io/os: linux
+      catalog.cattle.io/release-name: vm-import-ui
+    apiVersion: v2
+    appVersion: 1.8.0
+    created: "2026-06-11T17:19:59.520160151Z"
+    description: 'Web-based UI for importing virtual machines into Harvester / SUSE
+      Virtualization clusters. Supports both the native VM Import Controller and Forklift
+      (Konveyor MTV) migration engines. '
+    digest: 6412e67575a60b4251c014ffd6be84d92c9e92a682b95a7ed6e91d5f47f91794
+    home: https://github.com/doccaz/vm-import-ui
+    icon: https://raw.githubusercontent.com/doccaz/vm-import-ui/master/frontend/public/favicon.svg
+    keywords:
+    - harvester
+    - vm-import
+    - migration
+    - virtualization
+    - forklift
+    maintainers:
+    - name: doccaz
+      url: https://github.com/doccaz
+    name: vm-import-ui
+    sources:
+    - https://github.com/doccaz/vm-import-ui
+    type: application
+    urls:
+    - https://doccaz.github.io/vm-import-ui/vm-import-ui-0.2.0.tgz
+    version: 0.2.0
   - apiVersion: v2
     appVersion: 1.8.0
-    created: "2026-06-11T17:06:03.239515788Z"
+    created: "2026-06-11T17:19:59.519647121Z"
     description: 'Web-based UI for importing virtual machines into Harvester / SUSE
       Virtualization clusters. Supports both the native VM Import Controller and Forklift
       (Konveyor MTV) migration engines. '
@@ -25,4 +56,4 @@ entries:
     urls:
     - https://doccaz.github.io/vm-import-ui/vm-import-ui-0.1.0.tgz
     version: 0.1.0
-generated: "2026-06-11T17:06:03.238894437Z"
+generated: "2026-06-11T17:19:59.519183194Z"
