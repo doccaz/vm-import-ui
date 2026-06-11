@@ -57,6 +57,9 @@ type UpdatePlanPayload struct {
 	DefaultNetworkInterfaceModel   *string `json:"defaultNetworkInterfaceModel,omitempty"`
 	SkipPreflightChecks            *bool   `json:"skipPreflightChecks,omitempty"`
 	DefaultDiskBusType             *string `json:"defaultDiskBusType,omitempty"`
+	// NetworkMapping, when non-nil, replaces spec.networkMapping wholesale. An empty
+	// slice clears it. VMIC marks a plan invalid if a source NIC is left unmapped.
+	NetworkMapping *[]NetworkMapping `json:"networkMapping,omitempty"`
 }
 
 // VirtualMachineImport is the Schema for the virtualmachineimports API

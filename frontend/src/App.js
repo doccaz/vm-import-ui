@@ -359,19 +359,53 @@ const EditVmicPlanModal = ({ plan, onCancel, onSave, capabilities = {} }) => {
     const [defaultModel, setDefaultModel] = useState(plan.spec?.defaultNetworkInterfaceModel || '');
     const [diskBus, setDiskBus] = useState(plan.spec?.defaultDiskBusType || '');
     const [storageClasses, setStorageClasses] = useState([]);
+    const [harvesterNetworks, setHarvesterNetworks] = useState([]);
+
+    // Source NICs are recorded on the plan when it's created (annotation), so we can
+    // rebuild the network-mapping table without re-fetching vCenter inventory.
+    const sourceNetworks = useMemo(() => {
+        try {
+            const raw = JSON.parse(plan.metadata?.annotations?.['migration.harvesterhci.io/original-networks'] || '[]');
+            return [...new Set(raw.map(n => n.name || n.Name).filter(Boolean))];
+        } catch { return []; }
+    }, [plan]);
+
+    const [networkMappings, setNetworkMappings] = useState(() => {
+        const init = {};
+        (plan.spec?.networkMapping || []).forEach(m => { if (m.sourceNetwork) init[m.sourceNetwork] = m.destinationNetwork || ''; });
+        return init;
+    });
+    const [networkModels, setNetworkModels] = useState(() => {
+        const init = {};
+        (plan.spec?.networkMapping || []).forEach(m => { if (m.sourceNetwork && m.networkInterfaceModel) init[m.sourceNetwork] = m.networkInterfaceModel; });
+        return init;
+    });
 
     useEffect(() => {
         fetch('/api/v1/harvester/storageclasses')
             .then(res => res.json())
             .then(data => setStorageClasses(data.map(sc => sc.metadata.name)))
             .catch(() => {});
+        fetch('/api/v1/harvester/vlanconfigs')
+            .then(res => res.json())
+            .then(data => setHarvesterNetworks(Array.isArray(data) ? data.map(n => `${n?.metadata?.namespace || 'default'}/${n?.metadata?.name}`) : []))
+            .catch(() => setHarvesterNetworks([]));
     }, []);
+
+    const unmappedNetworks = sourceNetworks.filter(n => !networkMappings[n]);
 
     const handleSave = () => {
         const updates = {
             virtualMachineName: vmName,
             storageClass,
             folder,
+            networkMapping: sourceNetworks
+                .map(name => ({
+                    sourceNetwork: name,
+                    destinationNetwork: networkMappings[name] || '',
+                    networkInterfaceModel: capabilities.hasAdvancedPower ? (networkModels[name] || undefined) : undefined,
+                }))
+                .filter(m => m.destinationNetwork),
         };
         if (capabilities.hasAdvancedPower) {
             updates.forcePowerOff = forcePowerOff;
@@ -410,6 +444,42 @@ const EditVmicPlanModal = ({ plan, onCancel, onSave, capabilities = {} }) => {
                             </select>
                         ) : (
                             <input type="text" value={storageClass} onChange={e => setStorageClass(e.target.value)} className="mt-1 block w-full form-input" />
+                        )}
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-main">Network Mapping</label>
+                        {sourceNetworks.length === 0 ? (
+                            <p className="text-xs text-secondary mt-1 italic">No source networks recorded on this plan.</p>
+                        ) : (
+                            <>
+                                {unmappedNetworks.length > 0 && (
+                                    <p className="text-xs text-orange-600 mt-1 flex items-center"><AlertTriangle size={12} className="mr-1" />Unmapped source networks make the plan invalid.</p>
+                                )}
+                                <div className="mt-2 space-y-2">
+                                    {sourceNetworks.map(net => (
+                                        <div key={net} className="flex items-center gap-2">
+                                            <span className="font-mono text-xs text-main flex-1 break-all" title={net}>{net}</span>
+                                            <ArrowRight size={14} className="text-secondary opacity-70 shrink-0" />
+                                            <select value={networkMappings[net] || ''} onChange={e => setNetworkMappings(prev => ({ ...prev, [net]: e.target.value }))} className="form-select text-sm flex-1">
+                                                <option value="">Select Harvester Network</option>
+                                                {harvesterNetworks.map(hnet => <option key={hnet} value={hnet}>{hnet}</option>)}
+                                            </select>
+                                            {capabilities.hasAdvancedPower && (
+                                                <select value={networkModels[net] || ''} onChange={e => setNetworkModels(prev => ({ ...prev, [net]: e.target.value }))} className="form-select text-sm w-28" title="Interface Model">
+                                                    <option value="">Model</option>
+                                                    <option value="e1000">e1000</option>
+                                                    <option value="e1000e">e1000e</option>
+                                                    <option value="ne2k_pci">ne2k_pci</option>
+                                                    <option value="pcnet">pcnet</option>
+                                                    <option value="rtl8139">rtl8139</option>
+                                                    <option value="virtio">virtio</option>
+                                                </select>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </>
                         )}
                     </div>
 

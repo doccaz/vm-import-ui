@@ -324,6 +324,27 @@ func UpdatePlanHandler(clients *K8sClients) http.HandlerFunc {
 				unstructured.SetNestedField(item.Object, *payload.GracefulShutdownTimeoutSeconds, "spec", "gracefulShutdownTimeoutSeconds")
 			}
 		}
+		if payload.NetworkMapping != nil {
+			mappings := make([]interface{}, 0, len(*payload.NetworkMapping))
+			for _, m := range *payload.NetworkMapping {
+				entry := map[string]interface{}{
+					"sourceNetwork":      m.SourceNetwork,
+					"destinationNetwork": m.DestinationNetwork,
+				}
+				if m.NetworkInterfaceModel != "" {
+					entry["networkInterfaceModel"] = m.NetworkInterfaceModel
+				}
+				mappings = append(mappings, entry)
+			}
+			if len(mappings) == 0 {
+				unstructured.RemoveNestedField(item.Object, "spec", "networkMapping")
+			} else {
+				if err := unstructured.SetNestedSlice(item.Object, mappings, "spec", "networkMapping"); err != nil {
+					respondWithError(w, http.StatusInternalServerError, "Failed to set network mapping: "+err.Error())
+					return
+				}
+			}
+		}
 
 		updatedItem, err := clients.Dynamic.Resource(vmiGVR).Namespace(namespace).Update(context.TODO(), item, metav1.UpdateOptions{})
 		if err != nil {
