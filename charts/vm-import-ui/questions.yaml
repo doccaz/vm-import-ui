@@ -1,0 +1,71 @@
+questions:
+  # ── Container image ──────────────────────────────────────────────────────────
+  - variable: image.repository
+    label: Image Repository
+    description: "Container image repository for the UI."
+    type: string
+    default: "ghcr.io/doccaz/vm-import-ui"
+    group: "Container Image"
+  - variable: image.tag
+    label: Image Tag
+    description: "Image tag to deploy. Leave blank to use the chart's appVersion; use 'latest' for the newest build."
+    type: string
+    default: ""
+    group: "Container Image"
+
+  # ── Networking ───────────────────────────────────────────────────────────────
+  - variable: service.type
+    label: Service Type
+    description: "How the UI is exposed."
+    type: enum
+    options:
+      - "NodePort"
+      - "ClusterIP"
+      - "LoadBalancer"
+    default: "NodePort"
+    group: "Networking"
+  - variable: service.nodePort
+    label: NodePort
+    description: "Fixed NodePort (Kubernetes allows 30000-32767). Used when Service Type is NodePort."
+    type: int
+    default: 32000
+    min: 30000
+    max: 32767
+    group: "Networking"
+    show_if: "service.type=NodePort"
+
+  # ── Application ──────────────────────────────────────────────────────────────
+  - variable: env.logLevel
+    label: Log Level
+    description: "Backend log verbosity."
+    type: enum
+    options:
+      - "debug"
+      - "info"
+      - "warn"
+      - "error"
+    default: "info"
+    group: "Application"
+
+  # ── Rancher integration ──────────────────────────────────────────────────────
+  - variable: navLink.enabled
+    label: Add Rancher Menu Link
+    description: "Create a ui.cattle.io NavLink so the UI appears in the Rancher / Harvester menu."
+    type: boolean
+    default: true
+    group: "Rancher Integration"
+  - variable: navLink.url
+    label: Menu Link URL (optional)
+    description: "External URL for the menu link, e.g. http://NODE-IP:32000. Leave blank to link via the in-cluster Service proxy."
+    type: string
+    default: ""
+    group: "Rancher Integration"
+    show_if: "navLink.enabled=true"
+
+  # ── RBAC ─────────────────────────────────────────────────────────────────────
+  - variable: rbac.create
+    label: Create RBAC
+    description: "Create the ClusterRole + ClusterRoleBinding the app needs to read Harvester, KubeVirt, VM Import Controller, and Forklift resources."
+    type: boolean
+    default: true
+    group: "RBAC"

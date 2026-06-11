@@ -40,6 +40,23 @@ env:
   # Set to "true" to run in dev/mock mode without a real cluster
   useMockData: "false"
 
+# Rancher UI integration: create a ui.cattle.io NavLink so the app shows up in
+# the Rancher / Harvester left-hand menu. The NavLink is only rendered when the
+# ui.cattle.io/v1 CRD is present (Rancher-managed clusters such as Harvester),
+# so leaving this enabled is safe on plain Kubernetes — it's simply skipped.
+navLink:
+  enabled: true
+  label: "VM Import UI"
+  # Menu group/section the link is filed under
+  group: "Harvester"
+  description: "Import VMs from VMware vCenter into Harvester"
+  # External URL for the link, e.g. "http://<node-ip>:32000". Leave blank to link
+  # through the in-cluster Service proxy (works without knowing a node IP, but the
+  # UI must tolerate being served under a sub-path).
+  url: ""
+  # Icon shown beside the menu entry (data URI or URL). Defaults to the app icon.
+  iconSrc: "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiIHN0cm9rZT0iY3VycmVudENvbG9yIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIgY2xhc3M9ImZlYXRoZXIgZmVhdGhlci1oYXJkLWRyaXZlIj4KICAgIDxsaW5lIHgxPSIyMiIgeTE9IjEyIiB4Mj0iMiIgeTI9IjEyIj48L2xpbmU+CiAgICA8cGF0aCBkPSJNNS40NSA1LjExTDIgMTJ2NmEyIDIgMCAwIDAgMiAyaDE2YTIgMiAwIDAgMCAyLTJ2LTZsLTMuNDUtNi44OUEyIDIgMCAwIDAgMTYuNzYgNEg3LjI0YTIgMiAwIDAgMC0xLjc5IDEuMTF6Ij48L3BhdGg+CiAgICA8bGluZSB4MT0iNiIgeTE9IjE2IiB4Mj0iNi4wMSIgeTI9IjE2Ij48L2xpbmU+CiAgICA8bGluZSB4MT0iMTAiIHkxPSIxNiIgeDI9IjEwLjAxIiB5Mj0iMTYiPjwvbGluZT4KPC9zdmc+Cgo="
+
 # Resource requests and limits (leave empty to use cluster defaults)
 resources: {}
   # requests:

@@ -1,0 +1,35 @@
+{{- /*
+Rancher menu entry. NavLink is a cluster-scoped ui.cattle.io/v1 resource, so it
+is only rendered when that CRD is registered (Rancher-managed clusters like
+Harvester). On plain Kubernetes the APIVersions check is false and this is
+skipped, keeping the chart installable everywhere.
+*/ -}}
+{{- if and .Values.navLink.enabled (.Capabilities.APIVersions.Has "ui.cattle.io/v1") -}}
+apiVersion: ui.cattle.io/v1
+kind: NavLink
+metadata:
+  name: {{ include "vm-import-ui.fullname" . }}
+  labels:
+    {{- include "vm-import-ui.labels" . | nindent 4 }}
+spec:
+  label: {{ .Values.navLink.label | default "VM Import UI" | quote }}
+  {{- with .Values.navLink.group }}
+  group: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.navLink.description }}
+  description: {{ . | quote }}
+  {{- end }}
+  {{- with .Values.navLink.iconSrc }}
+  iconSrc: {{ . | quote }}
+  {{- end }}
+  {{- if .Values.navLink.url }}
+  toURL: {{ .Values.navLink.url | quote }}
+  target: _blank
+  {{- else }}
+  toService:
+    name: {{ include "vm-import-ui.fullname" . }}
+    namespace: {{ .Release.Namespace }}
+    scheme: http
+    port: {{ .Values.service.port }}
+  {{- end }}
+{{- end }}
