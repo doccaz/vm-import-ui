@@ -4,8 +4,8 @@ description: >
   Web-based UI for importing virtual machines into Harvester / SUSE Virtualization clusters.
   Supports both the native VM Import Controller and Forklift (Konveyor MTV) migration engines.
 type: application
-version: 0.2.1
-appVersion: "1.8.0"
+version: 0.2.2
+appVersion: "1.8.1"
 icon: https://raw.githubusercontent.com/doccaz/vm-import-ui/master/frontend/public/favicon.svg
 keywords:
   - harvester
