@@ -35,5 +35,9 @@ jobs:
 
       - name: Run chart-releaser
         uses: helm/chart-releaser-action@v1.6.0
+        with:
+          # Don't fail if a chart version's release already exists — just
+          # (re)generate index.yaml on gh-pages. Lets re-runs be idempotent.
+          skip_existing: true
         env:
           CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
