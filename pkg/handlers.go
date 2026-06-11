@@ -636,8 +636,11 @@ func ListVlanConfigsHandler(clients *K8sClients) http.HandlerFunc {
 			Resource: "network-attachment-definitions",
 		}
 
+		// Match any Harvester-managed network regardless of type. Filtering on
+		// =L2VlanNetwork dropped UntaggedNetwork NADs (e.g. "local-network"); an
+		// existence selector on the type label includes both VLAN and untagged.
 		listOptions := metav1.ListOptions{
-			LabelSelector: "network.harvesterhci.io/type=L2VlanNetwork",
+			LabelSelector: "network.harvesterhci.io/type",
 		}
 
 		list, err := clients.Dynamic.Resource(gvr).Namespace("").List(context.TODO(), listOptions)
