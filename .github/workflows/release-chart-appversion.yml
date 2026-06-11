@@ -29,6 +29,30 @@ jobs:
       - name: Install Helm
         uses: azure/setup-helm@v4
 
+      # The chart defaults image.tag to appVersion, so it must not advertise a
+      # version whose image isn't in the registry yet. The GHCR image build runs
+      # in parallel (and may be slow on a busy self-hosted runner), so wait for
+      # the ghcr.io/<repo>:<version> manifest to exist before publishing the chart.
+      - name: Wait for the release image in GHCR
+        run: |
+          set -euo pipefail
+          APP_VERSION="${GITHUB_REF_NAME#v}"
+          echo "Waiting for ghcr.io/${GITHUB_REPOSITORY}:${APP_VERSION} ..."
+          for i in $(seq 1 80); do
+            TOKEN=$(curl -s "https://ghcr.io/token?scope=repository:${GITHUB_REPOSITORY}:pull" \
+              | sed -E 's/.*"token":"([^"]+)".*/\1/')
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+              -H "Authorization: Bearer ${TOKEN}" \
+              -H "Accept: application/vnd.oci.image.index.v1+json" \
+              -H "Accept: application/vnd.docker.distribution.manifest.list.v2+json" \
+              "https://ghcr.io/v2/${GITHUB_REPOSITORY}/manifests/${APP_VERSION}")
+            if [ "$CODE" = "200" ]; then echo "Image published."; exit 0; fi
+            echo "attempt ${i}/80: HTTP ${CODE}; retrying in 30s"
+            sleep 30
+          done
+          echo "Timed out waiting for ghcr.io/${GITHUB_REPOSITORY}:${APP_VERSION}." >&2
+          exit 1
+
       - name: Sync chart appVersion to release tag
         id: sync
         run: |
