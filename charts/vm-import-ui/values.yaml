@@ -47,8 +47,9 @@ env:
 navLink:
   enabled: true
   label: "VM Import UI"
-  # Menu group/section the link is filed under
-  group: "Harvester"
+  # Menu group/section the link is filed under. Set to "" for a flat, top-level
+  # item in the main menu (no group header).
+  group: "Utilities"
   description: "Import VMs from VMware vCenter into Harvester"
   # External URL for the link, e.g. "http://<node-ip>:32000". Leave blank to link
   # through the in-cluster Service proxy (works without knowing a node IP, but the

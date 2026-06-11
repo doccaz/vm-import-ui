@@ -54,9 +54,16 @@ questions:
     type: boolean
     default: true
     group: "Rancher Integration"
+  - variable: navLink.group
+    label: Menu Group
+    description: "Menu section the link is filed under. Leave blank for a flat, top-level item."
+    type: string
+    default: "Utilities"
+    group: "Rancher Integration"
+    show_if: "navLink.enabled=true"
   - variable: navLink.url
     label: Menu Link URL (optional)
-    description: "External URL for the menu link, e.g. http://NODE-IP:32000. Leave blank to link via the in-cluster Service proxy."
+    description: "External URL for the menu link, e.g. http://NODE-IP:32000 or a Cloudflare tunnel hostname. Leave blank to link via the in-cluster Service proxy (note: a single-page app may render blank under the proxy sub-path)."
     type: string
     default: ""
     group: "Rancher Integration"
