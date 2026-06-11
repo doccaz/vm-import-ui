@@ -1,0 +1,39 @@
+name: Release Helm Chart
+
+# Publishes charts/ as a Helm repo served from GitHub Pages.
+# chart-releaser packages each chart, creates a GitHub Release (tagged
+# <chart>-<version>) with the .tgz asset, and updates index.yaml on the
+# gh-pages branch. A chart version is only released once — bump the
+# `version` in charts/vm-import-ui/Chart.yaml to publish a new one.
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'charts/**'
+  workflow_dispatch:
+
+jobs:
+  release:
+    # GitHub-hosted runner (public repo → free); avoids self-hosted git/network setup
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "$GITHUB_ACTOR"
+          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Run chart-releaser
+        uses: helm/chart-releaser-action@v1.6.0
+        env:
+          CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"

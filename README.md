@@ -92,7 +92,20 @@ podman run -p 8080:8080 \
 ## In-Cluster Deployment (Helm)
 
 To run the UI **inside** the Harvester cluster (no local kubeconfig needed — the pod
-authenticates with its own ServiceAccount), use the Helm chart in [`charts/vm-import-ui`](charts/vm-import-ui):
+authenticates with its own ServiceAccount), use the Helm chart in [`charts/vm-import-ui`](charts/vm-import-ui).
+
+**From the published Helm repo** (GitHub Pages):
+
+```bash
+helm repo add vm-import-ui https://doccaz.github.io/vm-import-ui
+helm repo update
+helm install vm-import-ui vm-import-ui/vm-import-ui \
+  --namespace vm-import-ui --create-namespace \
+  --set service.nodePort=32000 \
+  --set image.tag=latest
+```
+
+**Or directly from the chart source** in this repo:
 
 ```bash
 helm install vm-import-ui ./charts/vm-import-ui \
