@@ -9,7 +9,38 @@ entries:
       catalog.cattle.io/release-name: vm-import-ui
     apiVersion: v2
     appVersion: 1.8.0
-    created: "2026-06-11T17:19:59.520160151Z"
+    created: "2026-06-11T17:35:20.057840838Z"
+    description: 'Web-based UI for importing virtual machines into Harvester / SUSE
+      Virtualization clusters. Supports both the native VM Import Controller and Forklift
+      (Konveyor MTV) migration engines. '
+    digest: a49495b8b785efdeda370e315c23308b3b7adb4cecfd4e78e7b6334965eb315d
+    home: https://github.com/doccaz/vm-import-ui
+    icon: https://raw.githubusercontent.com/doccaz/vm-import-ui/master/frontend/public/favicon.svg
+    keywords:
+    - harvester
+    - vm-import
+    - migration
+    - virtualization
+    - forklift
+    maintainers:
+    - name: doccaz
+      url: https://github.com/doccaz
+    name: vm-import-ui
+    sources:
+    - https://github.com/doccaz/vm-import-ui
+    type: application
+    urls:
+    - https://doccaz.github.io/vm-import-ui/vm-import-ui-0.2.1.tgz
+    version: 0.2.1
+  - annotations:
+      catalog.cattle.io/display-name: Harvester VM Import UI
+      catalog.cattle.io/kube-version: '>= 1.20.0-0'
+      catalog.cattle.io/namespace: vm-import-ui
+      catalog.cattle.io/os: linux
+      catalog.cattle.io/release-name: vm-import-ui
+    apiVersion: v2
+    appVersion: 1.8.0
+    created: "2026-06-11T17:35:20.057337754Z"
     description: 'Web-based UI for importing virtual machines into Harvester / SUSE
       Virtualization clusters. Supports both the native VM Import Controller and Forklift
       (Konveyor MTV) migration engines. '
@@ -34,7 +65,7 @@ entries:
     version: 0.2.0
   - apiVersion: v2
     appVersion: 1.8.0
-    created: "2026-06-11T17:19:59.519647121Z"
+    created: "2026-06-11T17:35:20.056840371Z"
     description: 'Web-based UI for importing virtual machines into Harvester / SUSE
       Virtualization clusters. Supports both the native VM Import Controller and Forklift
       (Konveyor MTV) migration engines. '
@@ -56,4 +87,4 @@ entries:
     urls:
     - https://doccaz.github.io/vm-import-ui/vm-import-ui-0.1.0.tgz
     version: 0.1.0
-generated: "2026-06-11T17:19:59.519183194Z"
+generated: "2026-06-11T17:35:20.056397761Z"
