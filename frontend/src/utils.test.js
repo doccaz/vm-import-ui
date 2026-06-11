@@ -1,7 +1,7 @@
 // frontend/src/utils.test.js
 import fs from 'fs';
 import path from 'path';
-import { formatBytes, formatDate, formatDuration, slugify, buildVmicPlan, extractVms } from './utils';
+import { formatBytes, formatDate, formatDuration, slugify, buildVmicPlan, extractVms, vmImportNameError } from './utils';
 
 describe('formatBytes', () => {
     test('returns "0 Bytes" for 0', () => {
@@ -114,6 +114,36 @@ describe('slugify', () => {
 
     test('handles complex VM names', () => {
         expect(slugify('Windows Server 2019 (Production)')).toBe('windows-server-2019-production');
+    });
+});
+
+describe('vmImportNameError', () => {
+    test('accepts a DNS-1123-compatible name (case-insensitive)', () => {
+        expect(vmImportNameError('SLES-16')).toBeNull();
+        expect(vmImportNameError('rhel-8-lvm-bios')).toBeNull();
+        expect(vmImportNameError('vm01')).toBeNull();
+    });
+
+    test('rejects names with spaces (the SLES 16 case)', () => {
+        expect(vmImportNameError('SLES 16')).toMatch(/sles 16/);
+    });
+
+    test('rejects names with dots', () => {
+        expect(vmImportNameError('SLES 16.0')).toBeTruthy();
+        expect(vmImportNameError('vm.prod')).toBeTruthy();
+    });
+
+    test('rejects names with underscores', () => {
+        expect(vmImportNameError('my_vm')).toBeTruthy();
+    });
+
+    test('rejects names longer than 63 chars once lowercased', () => {
+        expect(vmImportNameError('a'.repeat(64))).toMatch(/63/);
+    });
+
+    test('returns null for empty/undefined (nothing to validate yet)', () => {
+        expect(vmImportNameError('')).toBeNull();
+        expect(vmImportNameError(undefined)).toBeNull();
     });
 });
 

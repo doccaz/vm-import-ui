@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Plus, ChevronRight, Server, Folder, Cloud, HardDrive, ArrowRight, X, Loader, CheckCircle, Cpu, MemoryStick, Trash2, Edit, AlertTriangle, RefreshCw, List, Package, Info, ChevronUp, ChevronDown, Search, Play, Square, RotateCcw, Power, CheckCircle2, HelpCircle, XCircle, Network, Check, Palette, ExternalLink, Copy, Download } from 'lucide-react';
-import { formatBytes, formatDate, formatDuration, slugify, buildVmicPlan } from './utils';
+import { formatBytes, formatDate, formatDuration, slugify, buildVmicPlan, vmImportNameError } from './utils';
 
 const getNestedValue = (obj, path) => {
     return path.split('.').reduce((acc, part) => acc && acc[part], obj);
@@ -429,6 +429,9 @@ const EditVmicPlanModal = ({ plan, onCancel, onSave, capabilities = {} }) => {
                         <label className="block text-sm font-medium text-main">VM Name (source)</label>
                         <input type="text" value={vmName} onChange={e => setVmName(e.target.value)} className="mt-1 block w-full form-input" />
                         <p className="text-xs text-secondary mt-1">Case-sensitive VM name as it appears in vCenter.</p>
+                        {vmImportNameError(vmName) && (
+                            <p className="text-xs text-red-600 mt-1 flex items-start"><AlertTriangle size={12} className="mr-1 mt-0.5 shrink-0" />{vmImportNameError(vmName)}</p>
+                        )}
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-main">Folder</label>
@@ -2724,6 +2727,12 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities, forkliftAvaila
                             <div><strong>Engine:</strong> {engine === 'forklift' ? 'Forklift' : 'VM Import Controller'}</div>
                             <div><strong>Plan Name:</strong> {planName}</div>
                             <div><strong>Destination VM Name:</strong> {sourceType === 'ova' ? ovaVmName : (engine === 'forklift' && forkliftTargetName ? `${forkliftTargetName} (original: ${selectedVm?.name})` : selectedVm?.name)}</div>
+                            {engine !== 'forklift' && vmImportNameError(sourceType === 'ova' ? ovaVmName : selectedVm?.name) && (
+                                <div className="p-2 bg-red-50 rounded border border-red-200 text-red-700 flex items-start">
+                                    <AlertTriangle size={14} className="mr-2 mt-0.5 shrink-0" />
+                                    <span>{vmImportNameError(sourceType === 'ova' ? ovaVmName : selectedVm?.name)}</span>
+                                </div>
+                            )}
                             {engine !== 'forklift' && <div><strong>Source Type:</strong> {sourceType === 'ova' ? 'OVA' : 'VMware vCenter'}</div>}
                             <div><strong>Target Namespace:</strong> {targetNamespace === 'create_new' ? `${newNamespace} (new)` : targetNamespace}</div>
                             <div><strong>Storage Class:</strong> {storageClass}</div>

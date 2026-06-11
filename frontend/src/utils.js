@@ -48,6 +48,22 @@ export const slugify = (text) =>
         .replace(/--+/g, '-')
         .replace(/^-+|-+$/g, '');
 
+// VMIC derives the destination VM name by ONLY lowercasing spec.virtualMachineName
+// (no space/dot stripping) and then requires it to be a valid DNS-1123 label.
+// So a source VM whose lowercased name isn't a valid label (e.g. "SLES 16" → "sles 16",
+// space) can never produce a valid plan — the VM must be renamed in vCenter first.
+// Returns null if the name is importable, otherwise a human-readable reason.
+export const vmImportNameError = (name) => {
+    if (!name) return null;
+    const lower = name.toString().toLowerCase();
+    if (lower.length > 63) return 'Name exceeds 63 characters once lowercased.';
+    if (!/^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/.test(lower)) {
+        return `VMIC will use "${lower}" as the Harvester VM name, which is not a valid Kubernetes name. ` +
+            'Rename the VM in vCenter to use only lowercase letters, numbers and hyphens (e.g. no spaces or dots), then import it.';
+    }
+    return null;
+};
+
 // Builds the VirtualMachineImport (VMIC) plan object from wizard state.
 // metadata.name is slugified (RFC-1123 object name); spec.virtualMachineName
 // is the RAW vCenter/OVA source name — VMIC locates the source VM by exact,
