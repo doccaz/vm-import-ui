@@ -47,3 +47,14 @@ Thumbs.db
 .env
 *.bak
 *.tmp
+
+# --- Proprietary VMware tooling: local validation only, NEVER redistribute ---
+# ovftool and the VDDK are licensed Broadcom products. They may be installed
+# locally to validate generated OVA/VMDK output, but must never be vendored into
+# this repo, the container image, or CI. See pkg/testdata/xsd/README.md.
+ovftool
+ovftool/
+VMware-ovftool-*
+vmware-vix-disklib-distrib/
+*.vmdk
+*.ova

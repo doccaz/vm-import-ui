@@ -76,3 +76,55 @@ questions:
     type: boolean
     default: true
     group: "RBAC"
+  - variable: export.enabled
+    label: "Enable VM Export (Harvester → OVA)"
+    description: "Adds an Export VMs page. Exports run as Kubernetes Jobs and need a ReadWriteMany volume to write OVAs to."
+    type: boolean
+    default: false
+    group: "VM Export"
+  - variable: export.storage.existingClaim
+    label: "Existing RWX claim"
+    description: "Name of an existing ReadWriteMany PVC to store exported OVAs (e.g. NFS-backed). Takes precedence over creating one."
+    type: string
+    default: ""
+    show_if: "export.enabled=true"
+    group: "VM Export"
+  - variable: export.storage.create
+    label: "Create the export volume"
+    description: "Let the chart create the ReadWriteMany PVC. Ignored if an existing claim is given."
+    type: boolean
+    default: false
+    show_if: "export.enabled=true"
+    group: "VM Export"
+  - variable: export.storage.storageClass
+    label: "Export volume storage class"
+    description: "Storage class for the created PVC. Must support ReadWriteMany (e.g. harvester-longhorn)."
+    type: storageclass
+    default: ""
+    show_if: "export.enabled=true&&export.storage.create=true"
+    group: "VM Export"
+  - variable: export.storage.size
+    label: "Export volume size"
+    description: "Must hold the converted disks plus the finished OVA — roughly twice the used size of the largest VM you export."
+    type: string
+    default: "200Gi"
+    show_if: "export.enabled=true&&export.storage.create=true"
+    group: "VM Export"
+  - variable: export.defaultProfile
+    label: "Default OVF profile"
+    description: "vmware = vSphere/ESXi. portable = VirtualBox/Proxmox/oVirt. faithful = virtio preserved, KVM only."
+    type: enum
+    options:
+      - "vmware"
+      - "portable"
+      - "faithful"
+    default: "vmware"
+    show_if: "export.enabled=true"
+    group: "VM Export"
+  - variable: export.maxConcurrent
+    label: "Maximum concurrent exports"
+    description: "Each export converts a whole disk; running many at once saturates storage."
+    type: int
+    default: 2
+    show_if: "export.enabled=true"
+    group: "VM Export"

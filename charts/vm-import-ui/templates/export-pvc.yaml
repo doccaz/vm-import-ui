@@ -1,0 +1,21 @@
+{{- if and .Values.export.enabled .Values.export.storage.create (not .Values.export.storage.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "vm-import-ui.exportClaimName" . }}
+  labels:
+    {{- include "vm-import-ui.labels" . | nindent 4 }}
+  annotations:
+    # Exported OVAs are expensive to regenerate, so the claim is kept when the
+    # release is uninstalled. Delete it explicitly to reclaim the space.
+    helm.sh/resource-policy: keep
+spec:
+  accessModes:
+    - {{ .Values.export.storage.accessMode }}
+  {{- if .Values.export.storage.storageClass }}
+  storageClassName: {{ .Values.export.storage.storageClass | quote }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ .Values.export.storage.size }}
+{{- end }}

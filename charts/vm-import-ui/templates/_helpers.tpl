@@ -59,3 +59,15 @@ ServiceAccount name to use for the pod.
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+{{/*
+Name of the PVC holding exported OVAs: an existing claim if one was supplied,
+otherwise the one this chart creates.
+*/}}
+{{- define "vm-import-ui.exportClaimName" -}}
+{{- if .Values.export.storage.existingClaim -}}
+{{- .Values.export.storage.existingClaim -}}
+{{- else -}}
+{{- printf "%s-exports" (include "vm-import-ui.fullname" .) -}}
+{{- end -}}
+{{- end -}}

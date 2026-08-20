@@ -76,6 +76,16 @@ rules:
     resources: ["network-attachment-definitions"]
     verbs: ["get", "list", "watch"]
 
+  {{- if .Values.export.enabled }}
+  # ── Jobs (VM export runs as a Job in the source VM's namespace) ──────────────
+  # The Job is also the export's state record, so listing them is how the API
+  # enumerates exports. No ConfigMap write access is needed. Granted only when
+  # export is enabled, so a default install carries no Job permissions.
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  {{- end }}
+
   # ── Apps (informational — pod controller lookups) ────────────────────────────
   - apiGroups: ["apps"]
     resources: ["deployments", "replicasets"]
