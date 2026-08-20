@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Plus, ChevronRight, Server, Folder, Cloud, HardDrive, ArrowRight, X, Loader, CheckCircle, Cpu, MemoryStick, Trash2, Edit, AlertTriangle, RefreshCw, List, Package, Info, ChevronUp, ChevronDown, Search, Play, Square, RotateCcw, Power, CheckCircle2, HelpCircle, XCircle, Network, Check, Palette, ExternalLink, Copy, Download } from 'lucide-react';
+import { Plus, ChevronRight, Server, Folder, Cloud, HardDrive, ArrowRight, X, Loader, CheckCircle, Cpu, MemoryStick, Trash2, Edit, AlertTriangle, RefreshCw, List, Package, Info, ChevronUp, ChevronDown, Search, Play, Square, RotateCcw, Power, CheckCircle2, HelpCircle, XCircle, Network, Check, Palette, ExternalLink, Copy, Download, Upload, Boxes } from 'lucide-react';
 import { formatBytes, formatDate, formatDuration, slugify, buildVmicPlan, vmImportNameError } from './utils';
 
 const getNestedValue = (obj, path) => {
@@ -1360,6 +1360,7 @@ const VmIcon = ({ type }) => {
         case 'ClusterComputeResource': return <Server className="w-5 h-5 text-purple-500" />;
         case 'Folder': return <Folder className="w-5 h-5 text-yellow-600" />;
         case 'VirtualMachine': return <HardDrive className="w-5 h-5 text-secondary" />;
+        case 'namespace': return <Boxes className="w-5 h-5 text-emerald-500" />;
         case 'disk': return <HardDrive className="w-4 h-4 text-blue-400" />;
         default: return null;
     }
@@ -2295,7 +2296,6 @@ const CreatePlanWizard = ({ onCancel, onCreatePlan, capabilities, forkliftAvaila
                         {engine === 'forklift' && selectedVm && (() => {
                             const rfcRegex = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/;
                             const vmName = selectedVm.name || '';
-                            const slugified = slugify(vmName);
                             const isCompliant = rfcRegex.test(vmName) && vmName.length <= 63;
                             if (isCompliant) return null;
                             return (
@@ -2952,6 +2952,524 @@ const SupportBundleCard = () => {
     );
 };
 
+
+// --- VM Export (Harvester -> OVA) ---
+
+// A disk contributes a virtual disk to the OVA only when it is a PVC-backed
+// "disk" device. CD-ROMs become empty drives, containerDisks are image layers,
+// and cloud-init volumes are excluded deliberately (they carry credentials).
+const isExportableDisk = (d) => d.kind === 'pvc' && d.device === 'disk';
+
+const EXPORT_PROFILES = [
+    {
+        key: 'vmware',
+        label: 'VMware / vSphere',
+        blurb: 'OVF 1.1 with VMware extensions. virtio devices are remapped to LSI Logic SCSI and E1000E, the hardware ESXi implements.',
+        prep: true,
+        warn: null,
+    },
+    {
+        key: 'portable',
+        label: 'Portable (OVF 1.0)',
+        blurb: 'Strict OVF 1.0, no vendor extensions, E1000 NIC. Widest compatibility: VirtualBox, Proxmox, oVirt.',
+        prep: true,
+        warn: null,
+    },
+    {
+        key: 'faithful',
+        label: 'Faithful (KVM)',
+        blurb: 'Preserves virtio devices verbatim and uses qcow2 disks for a lossless KVM/libvirt round-trip.',
+        warn: 'Will NOT boot on ESXi/vSphere, and ovftool cannot read qcow2-based packages.',
+    },
+];
+
+const HarvesterVmPanel = ({ vm, onExport, isBusy }) => {
+    const [profile, setProfile] = useState('vmware');
+    const [preview, setPreview] = useState('');
+    const [isPreviewing, setIsPreviewing] = useState(false);
+    const [previewError, setPreviewError] = useState('');
+
+    // Drop any stale preview when the selected VM or profile changes.
+    useEffect(() => { setPreview(''); setPreviewError(''); }, [vm, profile]);
+
+    const handlePreview = async () => {
+        if (!vm) return;
+        setIsPreviewing(true);
+        setPreviewError('');
+        try {
+            const response = await fetch('/api/v1/exports/preview', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ namespace: vm.namespace, name: vm.name, profile, preserveMacs: true }),
+            });
+            const text = await response.text();
+            if (!response.ok) {
+                let msg = text;
+                try { msg = JSON.parse(text).error || text; } catch (e) { /* not JSON */ }
+                throw new Error(msg);
+            }
+            setPreview(text);
+        } catch (err) {
+            setPreviewError(err.message);
+        } finally {
+            setIsPreviewing(false);
+        }
+    };
+
+    if (!vm) {
+        return (
+            <div className="flex flex-col items-center justify-center h-full text-secondary">
+                <HardDrive size={48} className="opacity-30 mb-3" />
+                <p className="text-sm">Select a virtual machine to see its export details.</p>
+            </div>
+        );
+    }
+
+    const blockers = vm.exportBlockers || [];
+    const canExport = blockers.length === 0;
+    const disks = vm.disks || [];
+    const exportable = disks.filter(isExportableDisk);
+
+    return (
+        <div className="h-full overflow-y-auto pr-1">
+            <div className="flex items-start justify-between mb-4">
+                <div>
+                    <h3 className="text-xl font-semibold text-main">{vm.name}</h3>
+                    <p className="text-sm text-secondary">{vm.namespace}</p>
+                </div>
+                <span className={`px-2 py-1 rounded-full text-xs font-medium ${vm.powerState === 'poweredOn' ? 'bg-green-100 text-green-800' : 'bg-app text-main border border-main'}`}>
+                    {vm.powerState === 'poweredOn' ? 'Running' : 'Stopped'}
+                </span>
+            </div>
+
+            {blockers.length > 0 && (
+                <div className="mb-4 p-3 rounded-md border border-amber-400 bg-amber-50">
+                    <div className="flex items-center text-amber-800 font-medium text-sm mb-1">
+                        <AlertTriangle size={16} className="mr-2" /> Cannot export right now
+                    </div>
+                    <ul className="list-disc list-inside text-sm text-amber-900">
+                        {blockers.map((b, i) => <li key={i}>{b}</li>)}
+                    </ul>
+                </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3 mb-4">
+                <div className="bg-app border border-main rounded-md p-3">
+                    <div className="flex items-center text-secondary text-xs mb-1"><Cpu size={14} className="mr-1" /> vCPUs</div>
+                    <div className="text-main font-semibold">{vm.cpu || '—'}</div>
+                </div>
+                <div className="bg-app border border-main rounded-md p-3">
+                    <div className="flex items-center text-secondary text-xs mb-1"><MemoryStick size={14} className="mr-1" /> Memory</div>
+                    <div className="text-main font-semibold">{vm.memoryMB ? `${(vm.memoryMB / 1024).toFixed(1)} GiB` : '—'}</div>
+                </div>
+                <div className="bg-app border border-main rounded-md p-3">
+                    <div className="text-secondary text-xs mb-1">Firmware / Machine</div>
+                    <div className="text-main font-semibold">{(vm.firmware || '—').toUpperCase()} · {vm.machineType || '—'}</div>
+                </div>
+                <div className="bg-app border border-main rounded-md p-3">
+                    <div className="text-secondary text-xs mb-1">Architecture</div>
+                    <div className="text-main font-semibold">{vm.architecture || '—'}</div>
+                </div>
+            </div>
+
+            <h4 className="font-medium text-main mb-2 flex items-center"><HardDrive size={16} className="mr-2" /> Disks</h4>
+            <div className="border border-main rounded-md overflow-hidden mb-4">
+                <table className="w-full text-sm">
+                    <thead className="bg-app">
+                        <tr className="text-left text-secondary">
+                            <th className="px-3 py-2 font-medium">Name</th>
+                            <th className="px-3 py-2 font-medium">Device</th>
+                            <th className="px-3 py-2 font-medium">Bus</th>
+                            <th className="px-3 py-2 font-medium">Size</th>
+                            <th className="px-3 py-2 font-medium">In OVA</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {disks.map((d, i) => (
+                            <tr key={i} className="border-t border-main">
+                                <td className="px-3 py-2 text-main">{d.name}</td>
+                                <td className="px-3 py-2 text-secondary">{d.device || '—'}</td>
+                                <td className="px-3 py-2 text-secondary">{d.busType || '—'}</td>
+                                <td className="px-3 py-2 text-secondary">{d.capacity ? formatBytes(d.capacity) : '—'}</td>
+                                <td className="px-3 py-2">
+                                    {isExportableDisk(d)
+                                        ? <span className="text-green-700 flex items-center"><Check size={14} className="mr-1" /> Yes</span>
+                                        : <span className="text-secondary" title={d.kind === 'cloudinit' ? 'Excluded: cloud-init volumes carry credentials' : 'Not a PVC-backed disk'}>No</span>}
+                                </td>
+                            </tr>
+                        ))}
+                        {disks.length === 0 && <tr><td colSpan="5" className="px-3 py-3 text-secondary text-center">No disks</td></tr>}
+                    </tbody>
+                </table>
+            </div>
+
+            <h4 className="font-medium text-main mb-2 flex items-center"><Network size={16} className="mr-2" /> Network interfaces</h4>
+            <div className="border border-main rounded-md overflow-hidden mb-4">
+                <table className="w-full text-sm">
+                    <thead className="bg-app">
+                        <tr className="text-left text-secondary">
+                            <th className="px-3 py-2 font-medium">Name</th>
+                            <th className="px-3 py-2 font-medium">Model</th>
+                            <th className="px-3 py-2 font-medium">MAC</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {(vm.networks || []).map((n, i) => (
+                            <tr key={i} className="border-t border-main">
+                                <td className="px-3 py-2 text-main">{n.name}</td>
+                                <td className="px-3 py-2 text-secondary">{n.id || '—'}</td>
+                                <td className="px-3 py-2 text-secondary font-mono text-xs">{n.mac || '—'}</td>
+                            </tr>
+                        ))}
+                        {(vm.networks || []).length === 0 && <tr><td colSpan="3" className="px-3 py-3 text-secondary text-center">No interfaces</td></tr>}
+                    </tbody>
+                </table>
+            </div>
+
+            <h4 className="font-medium text-main mb-2 flex items-center"><Package size={16} className="mr-2" /> OVF target profile</h4>
+            <div className="space-y-2 mb-4">
+                {EXPORT_PROFILES.map(p => (
+                    <label key={p.key} className={`flex items-start p-3 border rounded-md cursor-pointer ${profile === p.key ? 'border-blue-500 bg-app' : 'border-main'}`}>
+                        <input
+                            type="radio"
+                            name="export-profile"
+                            className="mt-1 mr-3"
+                            checked={profile === p.key}
+                            onChange={() => setProfile(p.key)}
+                        />
+                        <span className="flex-1">
+                            <span className="block text-main font-medium text-sm">{p.label}</span>
+                            <span className="block text-secondary text-xs mt-0.5">{p.blurb}</span>
+                            {p.warn && (
+                                <span className="block text-xs mt-1 text-red-600 font-medium flex items-center">
+                                    <AlertTriangle size={12} className="mr-1 shrink-0" /> {p.warn}
+                                </span>
+                            )}
+                        </span>
+                    </label>
+                ))}
+            </div>
+
+            {EXPORT_PROFILES.find(p => p.key === profile)?.prep && (
+                <div className="mb-4 p-3 rounded-md border border-amber-400 bg-amber-50">
+                    <div className="flex items-center text-amber-800 font-medium text-sm mb-1">
+                        <AlertTriangle size={16} className="mr-2" /> Prepare the guest before exporting
+                    </div>
+                    <p className="text-sm text-amber-900">
+                        This profile remaps virtio devices to hardware VMware implements. A guest installed on
+                        Harvester usually has a <strong>virtio-only initramfs</strong> and will drop to an emergency
+                        shell because it cannot see its own root disk. Run this <em>inside the VM</em>, then power it
+                        off and export:
+                    </p>
+                    <pre className="mt-2 p-2 rounded bg-gray-900 text-white text-xs overflow-x-auto">dracut --regenerate-all --force --no-hostonly    # RHEL/SLES/Fedora
+update-initramfs -u -k all                       # Debian/Ubuntu (MODULES=most)</pre>
+                    <p className="text-xs text-amber-900 mt-1">
+                        Windows guests need the LSI Logic / pvscsi storage driver installed and set to boot-start first.
+                    </p>
+                </div>
+            )}
+
+            <div className="mb-4">
+                <button onClick={handlePreview} disabled={isPreviewing} className="btn-secondary px-3 py-2 rounded-md text-sm flex items-center">
+                    {isPreviewing ? <Loader size={14} className="mr-2 animate-spin" /> : <Search size={14} className="mr-2" />}
+                    Preview OVF descriptor
+                </button>
+                {previewError && (
+                    <div className="mt-2 p-2 rounded-md border border-red-400 bg-red-50 text-red-800 text-xs flex items-start">
+                        <XCircle size={14} className="mr-2 mt-0.5 shrink-0" /> {previewError}
+                    </div>
+                )}
+                {preview && (
+                    <div className="mt-2 p-2 border border-main rounded-md bg-gray-900 text-white font-mono text-xs max-h-80 overflow-auto relative group">
+                        <CopyButton text={preview} className="absolute top-2 right-2 z-10" />
+                        <pre className="whitespace-pre">{preview}</pre>
+                    </div>
+                )}
+            </div>
+
+            <button
+                onClick={() => onExport && onExport(vm, profile)}
+                disabled={!canExport || isBusy}
+                title={canExport ? 'Export this VM to an OVA' : blockers.join('; ')}
+                className="w-full px-4 py-2 rounded-md flex items-center justify-center font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:bg-app disabled:text-secondary disabled:cursor-not-allowed transition-colors"
+            >
+                <Upload size={16} className="mr-2" />
+                Export to OVA
+                {canExport && exportable.length > 0 && ` (${exportable.length} disk${exportable.length > 1 ? 's' : ''})`}
+            </button>
+            <p className="text-xs text-secondary mt-2 text-center">
+                Runs as a Kubernetes Job: the VM's disks are mounted read-only, converted with qemu-img, and packaged as an OVA.
+            </p>
+        </div>
+    );
+};
+
+const EXPORT_TERMINAL = ['Ready', 'Failed'];
+
+const ExportsTable = ({ exports, onDelete, onLogs, isBusy }) => {
+    if (!exports.length) {
+        return <div className="text-sm text-secondary py-4 text-center">No exports yet.</div>;
+    }
+    return (
+        <div className="border border-main rounded-md overflow-x-auto">
+            <table className="w-full text-sm">
+                <thead className="bg-app">
+                    <tr className="text-left text-secondary">
+                        <th className="px-3 py-2 font-medium">VM</th>
+                        <th className="px-3 py-2 font-medium">Profile</th>
+                        <th className="px-3 py-2 font-medium">Phase</th>
+                        <th className="px-3 py-2 font-medium">Progress</th>
+                        <th className="px-3 py-2 font-medium">Size</th>
+                        <th className="px-3 py-2 font-medium">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {exports.map(e => {
+                        const done = EXPORT_TERMINAL.includes(e.phase);
+                        const failed = e.phase === 'Failed';
+                        return (
+                            <tr key={e.exportId} className="border-t border-main align-top">
+                                <td className="px-3 py-2 text-main">
+                                    {e.vmName}
+                                    <div className="text-xs text-secondary">{e.namespace}</div>
+                                </td>
+                                <td className="px-3 py-2 text-secondary">{e.profile}</td>
+                                <td className="px-3 py-2">
+                                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                        e.phase === 'Ready' ? 'bg-green-100 text-green-800'
+                                        : failed ? 'bg-red-100 text-red-800'
+                                        : 'bg-blue-100 text-blue-800'}`}>{e.phase}</span>
+                                    {e.error && <div className="text-xs text-red-600 mt-1 max-w-xs break-words">{e.error}</div>}
+                                </td>
+                                <td className="px-3 py-2 text-secondary" style={{ minWidth: '9rem' }}>
+                                    {done ? (e.stage || '—') : (
+                                        <>
+                                            <div className="w-full bg-app rounded-full h-1.5 border border-main">
+                                                <div className="bg-blue-500 h-full rounded-full transition-all" style={{ width: `${e.percent || 0}%` }} />
+                                            </div>
+                                            <div className="text-xs mt-1">{e.percent || 0}% {e.stage ? `· ${e.stage}` : ''}</div>
+                                        </>
+                                    )}
+                                </td>
+                                <td className="px-3 py-2 text-secondary">{e.sizeBytes ? formatBytes(e.sizeBytes) : '—'}</td>
+                                <td className="px-3 py-2">
+                                    <div className="flex items-center gap-2">
+                                        {e.downloadable && (
+                                            <button onClick={() => downloadExport(e)} className="text-blue-600 hover:underline text-xs flex items-center">
+                                                <Download size={12} className="mr-1" /> Download
+                                            </button>
+                                        )}
+                                        <button onClick={() => onLogs(e)} className="text-blue-600 hover:underline text-xs">Logs</button>
+                                        <button onClick={() => onDelete(e)} disabled={isBusy} className="text-red-600 hover:underline text-xs">Delete</button>
+                                    </div>
+                                    {e.ovaPath && <div className="text-xs text-secondary mt-1 font-mono break-all">{e.ovaPath}</div>}
+                                </td>
+                            </tr>
+                        );
+                    })}
+                </tbody>
+            </table>
+        </div>
+    );
+};
+
+// Downloads must go through fetch + blob: a plain <a href> or window.open
+// bypasses the sub-path rewrite in index.js and breaks behind the Rancher proxy.
+const downloadExport = async (e) => {
+    try {
+        const response = await fetch(`/api/v1/exports/${e.namespace}/${e.exportId}/download`);
+        if (!response.ok) {
+            const text = await response.text();
+            let msg = text;
+            try { msg = JSON.parse(text).error || text; } catch (err) { /* not JSON */ }
+            throw new Error(msg);
+        }
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${e.targetName || e.vmName}.ova`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+    } catch (err) {
+        alert(`Download failed: ${err.message}`);
+    }
+};
+
+const ExportPage = () => {
+    const [inventory, setInventory] = useState(null);
+    const [selectedVm, setSelectedVm] = useState(null);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState('');
+    const [exports, setExports] = useState([]);
+    const [isBusy, setIsBusy] = useState(false);
+    const [logs, setLogs] = useState(null);
+
+    const fetchInventory = useCallback(async () => {
+        setIsLoading(true);
+        setError('');
+        try {
+            const response = await fetch('/api/v1/harvester/inventory');
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.error || 'Failed to fetch Harvester inventory');
+            }
+            const data = await response.json();
+            setInventory(data);
+            // Keep the selection pointing at fresh data across refreshes.
+            setSelectedVm(current => {
+                if (!current) return null;
+                const all = [];
+                const walk = (n) => { if (n.type === 'VirtualMachine') all.push(n); (n.children || []).forEach(walk); };
+                walk(data);
+                return all.find(v => v.id === current.id) || null;
+            });
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+
+    useEffect(() => { fetchInventory(); }, [fetchInventory]);
+
+    const fetchExports = useCallback(async () => {
+        try {
+            const response = await fetch('/api/v1/exports');
+            if (!response.ok) return; // export may not be configured; stay quiet
+            setExports(await response.json());
+        } catch (err) {
+            console.error('Failed to list exports', err);
+        }
+    }, []);
+
+    useEffect(() => { fetchExports(); }, [fetchExports]);
+
+    // Poll only while something is in flight, so an idle page is silent.
+    useEffect(() => {
+        const active = exports.some(e => !EXPORT_TERMINAL.includes(e.phase));
+        if (!active) return undefined;
+        const t = setInterval(fetchExports, 5000);
+        return () => clearInterval(t);
+    }, [exports, fetchExports]);
+
+    const handleExport = async (vm, profile) => {
+        setIsBusy(true);
+        try {
+            const response = await fetch('/api/v1/exports', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ namespace: vm.namespace, name: vm.name, profile, preserveMacs: true }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || 'Failed to start export');
+            await fetchExports();
+        } catch (err) {
+            alert(`Export failed to start: ${err.message}`);
+        } finally {
+            setIsBusy(false);
+        }
+    };
+
+    const handleDeleteExport = async (e) => {
+        if (!window.confirm(`Delete the export of ${e.vmName}? This also removes the generated OVA.`)) return;
+        setIsBusy(true);
+        try {
+            const response = await fetch(`/api/v1/exports/${e.namespace}/${e.exportId}?purge=true`, { method: 'DELETE' });
+            if (!response.ok) {
+                const data = await response.json().catch(() => ({}));
+                throw new Error(data.error || 'Failed to delete export');
+            }
+            await fetchExports();
+        } catch (err) {
+            alert(err.message);
+        } finally {
+            setIsBusy(false);
+        }
+    };
+
+    const handleLogs = async (e) => {
+        setLogs({ name: e.vmName, text: 'Loading…' });
+        try {
+            const response = await fetch(`/api/v1/exports/${e.namespace}/${e.exportId}/logs`);
+            const text = await response.text();
+            setLogs({ name: e.vmName, text: response.ok ? text : `Failed to fetch logs: ${text}` });
+        } catch (err) {
+            setLogs({ name: e.vmName, text: `Failed to fetch logs: ${err.message}` });
+        }
+    };
+
+    const vmCount = useMemo(() => {
+        if (!inventory) return 0;
+        let n = 0;
+        const walk = (x) => { if (x.type === 'VirtualMachine') n++; (x.children || []).forEach(walk); };
+        walk(inventory);
+        return n;
+    }, [inventory]);
+
+    return (
+        <div className="w-full">
+            <div className="flex items-center justify-between mb-4">
+                <div>
+                    <h2 className="text-2xl font-bold text-main">Export VMs</h2>
+                    <p className="text-sm text-secondary">Export a Harvester virtual machine to a standards-conformant OVA.</p>
+                </div>
+                <button onClick={fetchInventory} disabled={isLoading} className="btn-secondary px-3 py-2 rounded-md flex items-center text-sm">
+                    <RefreshCw size={16} className={`mr-2 ${isLoading ? 'animate-spin' : ''}`} /> Refresh
+                </button>
+            </div>
+
+            {error && (
+                <div className="mb-4 p-3 rounded-md border border-red-400 bg-red-50 text-red-800 text-sm flex items-center">
+                    <XCircle size={16} className="mr-2" /> {error}
+                </div>
+            )}
+
+            <div className="flex gap-4" style={{ height: '70vh' }}>
+                <div className="w-1/3 bg-card border border-main rounded-lg p-3 flex flex-col">
+                    <div className="text-xs text-secondary mb-2 shrink-0">{vmCount} virtual machine{vmCount === 1 ? '' : 's'}</div>
+                    {isLoading && !inventory ? (
+                        <div className="flex-grow flex items-center justify-center text-secondary"><Loader size={20} className="animate-spin mr-2" /> Loading…</div>
+                    ) : inventory ? (
+                        <FilterableInventoryTree node={inventory} onVmSelect={setSelectedVm} currentlySelectedVm={selectedVm} />
+                    ) : (
+                        <div className="flex-grow flex items-center justify-center text-secondary text-sm">No inventory</div>
+                    )}
+                </div>
+                <div className="w-2/3 bg-card border border-main rounded-lg p-4">
+                    <HarvesterVmPanel vm={selectedVm} onExport={handleExport} isBusy={isBusy} />
+                </div>
+            </div>
+
+            <div className="mt-6">
+                <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-lg font-semibold text-main">Exports</h3>
+                    <button onClick={fetchExports} className="btn-secondary px-3 py-1.5 rounded-md flex items-center text-xs">
+                        <RefreshCw size={14} className="mr-2" /> Refresh
+                    </button>
+                </div>
+                <ExportsTable exports={exports} onDelete={handleDeleteExport} onLogs={handleLogs} isBusy={isBusy} />
+            </div>
+
+            {logs && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-6" onClick={() => setLogs(null)}>
+                    <div className="bg-card border border-main rounded-lg w-full max-w-4xl max-h-[80vh] flex flex-col" onClick={ev => ev.stopPropagation()}>
+                        <div className="p-4 border-b border-main flex items-center justify-between">
+                            <h3 className="font-semibold text-main">Export logs — {logs.name}</h3>
+                            <button onClick={() => setLogs(null)} className="text-secondary hover:text-main"><X size={18} /></button>
+                        </div>
+                        <div className="p-3 overflow-auto bg-gray-900 text-white font-mono text-xs flex-1">
+                            <pre className="whitespace-pre-wrap">{logs.text}</pre>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
 const AboutPage = () => (
     <div className="space-y-8">
         <div className="flex justify-between items-center mb-6">
@@ -3020,7 +3538,7 @@ const AboutPage = () => (
             <style>{`.github-corner:hover .octo-arm{animation:octocat-wave 560ms ease-in-out}@keyframes octocat-wave{0%,100%{transform:rotate(0)}20%,60%{transform:rotate(-25deg)}40%,80%{transform:rotate(10deg)}}@media (max-width:500px){.github-corner:hover .octo-arm{animation:none}.github-corner .octo-arm{animation:octocat-wave 560ms ease-in-out}}`}</style>
 
             <h2 className="text-xl font-semibold mb-4 z-10 relative text-main">Harvester VM Import UI</h2>
-            <p className="mb-2 z-10 relative text-main"><strong>Version:</strong> 1.8.1</p>
+            <p className="mb-2 z-10 relative text-main"><strong>Version:</strong> 1.9.0</p>
             <p className="mb-2 z-10 relative text-secondary font-medium">This UI provides a user-friendly interface for migrating virtual machines into Harvester / SUSE Virtualization clusters. It supports two migration engines: the native VM Import Controller and the Forklift (Konveyor) project, with sources including VMware vCenter, standalone ESXi hosts, and OVA/OVF files on NFS shares.</p>
             <p className="mb-6 italic text-sm text-secondary z-10 relative mt-2 border-l-4 border-blue-400 pl-3">Based off of an idea by Erico Mendonca (erico.mendonca@suse.com)</p>
 
@@ -3061,6 +3579,20 @@ const AboutPage = () => (
                     <ul className="list-disc list-inside text-sm mt-1 ml-2 space-y-1">
                         <li><strong>VM Import Controller:</strong> Define HTTP/HTTPS endpoints serving .ova files, with optional authentication.</li>
                         <li><strong>Forklift:</strong> Create OVA (NFS) providers pointing to NFS shares containing OVA/OVF files. Forklift auto-deploys an OVA server pod to scan and discover available VMs.</li>
+                    </ul>
+                </div>
+
+                <div>
+                    <h4 className="font-semibold text-main flex items-center mb-1"><Upload size={16} className="mr-1 text-blue-600" /> Export VMs Tab</h4>
+                    <p className="text-sm">
+                        Browse every Harvester virtual machine in the cluster, grouped by namespace, and export one to a
+                        standards-conformant <strong>OVA</strong> (DMTF DSP0243) for use in vSphere, VirtualBox, Proxmox or plain KVM.
+                    </p>
+                    <ul className="list-disc list-inside text-sm mt-1 ml-2 space-y-1">
+                        <li>Select a VM to see its vCPUs, memory, firmware, disks and network interfaces.</li>
+                        <li>The <strong>In OVA</strong> column shows which disks are included. Only PVC-backed disks are exported &mdash; CD-ROMs become empty drives and cloud-init volumes are excluded because they carry credentials.</li>
+                        <li>A VM must be <strong>powered off</strong> to be exported. Its disks are ReadWriteMany block volumes, so reading them while the VM runs would produce a torn, inconsistent image.</li>
+                        <li><strong>Prepare the guest first</strong> for the VMware and Portable profiles: rebuild its initramfs without host-only mode (<code>dracut --regenerate-all --no-hostonly</code>), or it will not find its root disk after the virtio&rarr;LSI Logic remap. Verified against ESXi 8.0.3.</li>
                     </ul>
                 </div>
 
@@ -4414,7 +4946,14 @@ export default function App() {
         localStorage.setItem('vm-import-theme', theme);
     }, [theme]);
     const [autoRefresh, setAutoRefresh] = useState(true);
-    const [page, setPage] = useState('plans');
+    // Initial page can come from ?page=<name> or #<name> so a second Rancher
+    // NavLink can deep-link straight to the export page.
+    const [page, setPage] = useState(() => {
+        const valid = ['plans', 'sources', 'ovaSources', 'export', 'about'];
+        const fromQuery = new URLSearchParams(window.location.search).get('page');
+        const fromHash = window.location.hash.replace(/^#/, '');
+        return valid.includes(fromQuery) ? fromQuery : (valid.includes(fromHash) ? fromHash : 'plans');
+    });
     const [plans, setPlans] = useState([]);
     const [sources, setSources] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -5000,6 +5539,8 @@ export default function App() {
                         )}
                     </div>
                 );
+            case 'export':
+                return <ExportPage />;
             case 'about':
                 return <AboutPage />;
             case 'plans':
@@ -5082,6 +5623,7 @@ export default function App() {
                     <button onClick={() => setPage('plans')} className={`px-4 py-2 flex items-center font-medium transition-colors ${page === 'plans' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-secondary hover:text-main'}`}><List size={18} className="mr-2" /> Migration Plans</button>
                     <button onClick={() => setPage('sources')} className={`px-4 py-2 flex items-center font-medium transition-colors ${page === 'sources' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-secondary hover:text-main'}`}><Server size={18} className="mr-2" /> vCenter Sources</button>
                     <button onClick={() => setPage('ovaSources')} className={`px-4 py-2 flex items-center font-medium transition-colors ${page === 'ovaSources' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-secondary hover:text-main'}`}><Package size={18} className="mr-2" /> OVA Sources</button>
+                    <button onClick={() => setPage('export')} className={`px-4 py-2 flex items-center font-medium transition-colors ${page === 'export' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-secondary hover:text-main'}`}><Upload size={18} className="mr-2" /> Export VMs</button>
                     <button onClick={() => setPage('about')} className={`px-4 py-2 flex items-center font-medium transition-colors ${page === 'about' ? 'border-b-2 border-blue-500 text-blue-600' : 'text-secondary hover:text-main'}`}><Info size={18} className="mr-2" /> About</button>
                 </nav>
 
