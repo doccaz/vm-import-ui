@@ -167,6 +167,12 @@ type exportConfig struct {
 }
 
 func loadExportConfig() exportConfig {
+	// The export Job must run as root by default. Source disks are exposed as
+	// block devices owned by root:disk, and a freshly provisioned RWX volume is
+	// root-owned and mode 755 — so the image's default UID 1001 cannot write to
+	// it. These defaults match the chart's; leaving them nil made the behaviour
+	// differ between a chart install and any other deployment.
+	defaultUser, defaultGroup := int64(0), int64(0)
 	c := exportConfig{
 		Root:          os.Getenv("EXPORT_ROOT"),
 		PVC:           os.Getenv("EXPORT_PVC"),
@@ -174,6 +180,8 @@ func loadExportConfig() exportConfig {
 		MaxConcurrent: 2,
 		TTLSeconds:    3600,
 		DeadlineSecs:  6 * 60 * 60,
+		RunAsUser:     &defaultUser,
+		FSGroup:       &defaultGroup,
 	}
 	if v := os.Getenv("EXPORT_MAX_CONCURRENT"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {

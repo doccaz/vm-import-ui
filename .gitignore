@@ -58,3 +58,9 @@ VMware-ovftool-*
 vmware-vix-disklib-distrib/
 *.vmdk
 *.ova
+
+# --- Credentials: never commit ---
+tmp-token
+*-token
+*.token
+.ghcr-token

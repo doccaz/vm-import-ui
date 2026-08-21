@@ -182,3 +182,49 @@ func TestQemuOutputOpts(t *testing.T) {
 		t.Errorf("qcow2 needs no vmdk options, got %q", got)
 	}
 }
+
+// The export Job must default to running as root. Source disks arrive as block
+// devices owned by root:disk, and a freshly provisioned RWX volume is root-owned
+// and mode 755, so the image's default UID 1001 cannot write to it.
+//
+// Regression: these defaults were nil when the env vars were unset, so a Job got
+// an empty securityContext and failed with
+// "mkdir /export/.vm-import-ui: permission denied" — but only outside a chart
+// install, since the chart set them explicitly.
+func TestLoadExportConfig_DefaultsToRootForBlockDeviceAccess(t *testing.T) {
+	for _, k := range []string{"EXPORT_RUN_AS_USER", "EXPORT_FS_GROUP"} {
+		t.Setenv(k, "")
+	}
+	c := loadExportConfig()
+	if c.RunAsUser == nil || *c.RunAsUser != 0 {
+		t.Errorf("RunAsUser = %v, want 0: the worker must be able to read block devices", c.RunAsUser)
+	}
+	if c.FSGroup == nil || *c.FSGroup != 0 {
+		t.Errorf("FSGroup = %v, want 0: the worker must be able to write to the export volume", c.FSGroup)
+	}
+
+	// And the Job actually carries them.
+	job, err := buildExportJob(testExportSpec(), ExportJobOptions{
+		Namespace: "labs", Image: "img:1", ExportPVC: "exports",
+		SourceClaims: []string{"c"}, RunAsUser: c.RunAsUser, FSGroup: c.FSGroup,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sc := job.Spec.Template.Spec.SecurityContext
+	if sc == nil || sc.RunAsUser == nil || *sc.RunAsUser != 0 {
+		t.Error("the Job's pod securityContext must set runAsUser: 0")
+	}
+}
+
+func TestLoadExportConfig_RespectsOverrides(t *testing.T) {
+	t.Setenv("EXPORT_RUN_AS_USER", "1001")
+	t.Setenv("EXPORT_FS_GROUP", "2000")
+	c := loadExportConfig()
+	if c.RunAsUser == nil || *c.RunAsUser != 1001 {
+		t.Errorf("RunAsUser = %v, want 1001", c.RunAsUser)
+	}
+	if c.FSGroup == nil || *c.FSGroup != 2000 {
+		t.Errorf("FSGroup = %v, want 2000", c.FSGroup)
+	}
+}
