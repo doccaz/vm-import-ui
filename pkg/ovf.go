@@ -306,6 +306,15 @@ func BuildOVF(in OVFInput, p Profile) ([]byte, error) {
 	if len(in.Disks) == 0 {
 		return nil, fmt.Errorf("VM %q has no disks to export", in.Name)
 	}
+	// A disk of unknown capacity would emit ovf:capacity="0": a well-formed
+	// package that silently declares a zero-byte disk. pvcIndex is best-effort,
+	// so a transient PVC-list failure could otherwise produce a garbage OVA that
+	// passes every validator. Fail loudly instead.
+	for i, d := range in.Disks {
+		if d.CapacityBytes <= 0 {
+			return nil, fmt.Errorf("disk %d (%s) has unknown capacity; refusing to emit a descriptor claiming a zero-byte disk", i, d.Href)
+		}
+	}
 
 	env := ovfEnvelope{Attrs: envelopeAttrs(rules)}
 

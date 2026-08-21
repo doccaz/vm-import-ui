@@ -298,6 +298,15 @@ func CreateExportHandler(clients *K8sClients) http.HandlerFunc {
 			respondWithError(w, http.StatusUnprocessableEntity, "VM has no PVC-backed disks to export")
 			return
 		}
+		// Surface an unreadable PVC as a clear 422 now, rather than letting the
+		// Job start and fail minutes later inside BuildOVF.
+		for _, d := range ovfIn.Disks {
+			if d.CapacityBytes <= 0 {
+				respondWithError(w, http.StatusUnprocessableEntity,
+					"Could not determine the capacity of disk "+d.Href+"; check that its PersistentVolumeClaim exists and is readable")
+				return
+			}
+		}
 
 		// Source claims, in the same order as the OVF disks.
 		var claims []string
