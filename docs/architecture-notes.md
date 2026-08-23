@@ -520,10 +520,39 @@ As of Rancher 2.10+, that main product UI is itself shipped as a Rancher UI Exte
 | `UI_PATH` | `/ui` | Path to frontend build directory |
 | `USE_MOCK_DATA` | `false` | Run without a Kubernetes cluster |
 | `EXPORT_ROOT` | — | This pod's mount of the export volume; unset disables status reads and downloads |
-| `EXPORT_PVC` | — | RWX claim the export Jobs mount |
+| `EXPORT_PVC` | — | Name of the RWX claim the export Jobs mount. A VM's Job runs in the VM's own namespace (a PVC cannot be mounted across namespaces), so outside this pod's own namespace a claim of this name is auto-created there — see `EXPORT_STORAGE_CLASS`/`EXPORT_STORAGE_SIZE` and `POD_NAMESPACE` below |
 | `EXPORT_IMAGE` | — | Image the export Jobs run (normally this same image) |
+| `EXPORT_STORAGE_CLASS` | cluster default | StorageClass for an `EXPORT_PVC` auto-created in a VM's namespace |
+| `EXPORT_STORAGE_SIZE` | `200Gi` | Size for an `EXPORT_PVC` auto-created in a VM's namespace |
+| `POD_NAMESPACE` | — | This pod's own namespace (downward API). Used to tell whether `EXPORT_ROOT` is actually the export's volume before trusting it for progress/downloads — unset falls back to always trusting `EXPORT_ROOT`, matching single-namespace behaviour |
 | `EXPORT_MAX_CONCURRENT` | `2` | Simultaneous export Jobs |
 | `EXPORT_TTL_SECONDS` | `3600` | How long finished export Jobs are kept |
 | `EXPORT_DOWNLOAD_MAX_BYTES` | `2147483648` | Server-side cap on browser downloads |
 | `EXPORT_RUN_AS_USER` / `EXPORT_FS_GROUP` | `0` | Job security context; block devices land as `root:disk` |
 | `EXPORT_SPEC` | — | Worker only: the JSON instruction set |
+
+### Cross-namespace export storage
+
+Export Jobs mount the VM's own PVCs read-only as block devices, which forces
+the Job into the VM's namespace — PVCs are namespace-scoped, full stop. Since
+this app's cluster-wide VM browser routinely exports VMs outside its own
+release namespace, the chart's `export-pvc.yaml` (which only creates a claim in
+the release namespace) is not sufficient on its own: `ensureExportPVC`
+(`pkg/export.go`) auto-provisions a same-named RWX claim in the VM's namespace
+on first export there, sized/classed from `EXPORT_STORAGE_CLASS` /
+`EXPORT_STORAGE_SIZE` (`export.storage.storageClass` / `export.storage.size` in
+the chart).
+
+That leaves progress reads and downloads only working for exports whose Job
+landed in this pod's own namespace, because `EXPORT_ROOT` is this pod's mount
+of *its own* namespace's claim — a different physical volume from any other
+namespace's auto-created claim. `exportVolumeMountedHere` gates on
+`POD_NAMESPACE` to report that honestly (`downloadable: false` with a
+`volumeNote`, and a clear 503 from `DownloadExportHandler`) rather than
+silently reading the wrong volume or claiming a real OVA "was not found".
+
+An admin who wants downloads to work everywhere can point
+`export.storage.existingClaim` at an NFS-backed share and create one static PV
+per target namespace against the same NFS export/path — `ensureExportPVC`
+will find the existing claim and leave it alone rather than creating a second
+one.

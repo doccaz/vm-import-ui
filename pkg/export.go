@@ -24,6 +24,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -164,6 +165,9 @@ type exportConfig struct {
 	DeadlineSecs  int64
 	RunAsUser     *int64
 	FSGroup       *int64
+	StorageClass  string // storage class for a PVC auto-created in a VM's namespace ("" = cluster default)
+	StorageSize   string // size for a PVC auto-created in a VM's namespace
+	PodNamespace  string // this pod's own namespace, to tell whether Root refers to a given export's volume
 }
 
 func loadExportConfig() exportConfig {
@@ -182,6 +186,12 @@ func loadExportConfig() exportConfig {
 		DeadlineSecs:  6 * 60 * 60,
 		RunAsUser:     &defaultUser,
 		FSGroup:       &defaultGroup,
+		StorageClass:  os.Getenv("EXPORT_STORAGE_CLASS"),
+		StorageSize:   os.Getenv("EXPORT_STORAGE_SIZE"),
+		PodNamespace:  os.Getenv("POD_NAMESPACE"),
+	}
+	if c.StorageSize == "" {
+		c.StorageSize = "200Gi"
 	}
 	if v := os.Getenv("EXPORT_MAX_CONCURRENT"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
@@ -326,6 +336,15 @@ func CreateExportHandler(clients *K8sClients) http.HandlerFunc {
 			i++
 		}
 
+		// The Job mounts the export volume alongside the VM's own PVCs, so it
+		// must live in the VM's namespace — a PVC cannot be mounted across
+		// namespaces. Provision one there on first use rather than failing the
+		// Job at schedule time with an opaque "persistentvolumeclaim not found".
+		if err := ensureExportPVC(ctx, clients, req.Namespace, cfg); err != nil {
+			respondWithError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
 		exportID := newExportID()
 		target := req.TargetName
 		if target == "" {
@@ -375,6 +394,45 @@ func CreateExportHandler(clients *K8sClients) http.HandlerFunc {
 			"profile":   string(profile),
 		})
 	}
+}
+
+// ensureExportPVC makes sure the export Job's RWX claim exists in namespace,
+// creating it from cfg.StorageClass/cfg.StorageSize if it doesn't. PVCs are
+// namespace-scoped, so a Job in a VM's namespace can never mount the PVC this
+// pod itself mounts (EXPORT_ROOT) unless the VM happens to live in this pod's
+// own namespace — see cfg.PodNamespace / exportView for the read-side of that.
+func ensureExportPVC(ctx context.Context, clients *K8sClients, namespace string, cfg exportConfig) error {
+	pvcs := clients.Clientset.CoreV1().PersistentVolumeClaims(namespace)
+	if _, err := pvcs.Get(ctx, cfg.PVC, metav1.GetOptions{}); err == nil {
+		return nil
+	} else if !errors.IsNotFound(err) {
+		return fmt.Errorf("failed to check export volume %s/%s: %w", namespace, cfg.PVC, err)
+	}
+
+	size, err := resource.ParseQuantity(cfg.StorageSize)
+	if err != nil {
+		return fmt.Errorf("invalid export volume size %q: %w", cfg.StorageSize, err)
+	}
+	pvc := &v1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cfg.PVC,
+			Namespace: namespace,
+			Labels:    map[string]string{exportLabelMarker: "true"},
+		},
+		Spec: v1.PersistentVolumeClaimSpec{
+			AccessModes: []v1.PersistentVolumeAccessMode{v1.ReadWriteMany},
+			Resources: v1.ResourceRequirements{
+				Requests: v1.ResourceList{v1.ResourceStorage: size},
+			},
+		},
+	}
+	if cfg.StorageClass != "" {
+		pvc.Spec.StorageClassName = &cfg.StorageClass
+	}
+	if _, err := pvcs.Create(ctx, pvc, metav1.CreateOptions{}); err != nil && !errors.IsAlreadyExists(err) {
+		return fmt.Errorf("failed to create export volume %s/%s: %w", namespace, cfg.PVC, err)
+	}
+	return nil
 }
 
 // vmIsRunning reports whether a VirtualMachineInstance exists for the VM, which
@@ -485,6 +543,17 @@ func exportView(job *batchv1.Job, cfg exportConfig) map[string]interface{} {
 		"createdAt":  job.CreationTimestamp.UTC().Format(time.RFC3339),
 		"phase":      jobPhase(job),
 	}
+	if !exportVolumeMountedHere(job.Namespace, cfg) {
+		// The Job's export PVC lives in job.Namespace, which this pod does not
+		// mount (see ensureExportPVC) — reading progress or serving a download
+		// would silently read the wrong volume, so say so instead of omitting
+		// the fields without explanation.
+		view["downloadable"] = false
+		view["volumeNote"] = fmt.Sprintf(
+			"export volume for namespace %q is not mounted in this pod; fetch the OVA from the export share directly",
+			job.Namespace)
+		return view
+	}
 	if s, err := readExportStatus(cfg.Root, id); err == nil {
 		// The status file is more precise than the Job's coarse phase, but the
 		// Job is authoritative about failure: a worker killed outright never
@@ -507,6 +576,22 @@ func exportView(job *batchv1.Job, cfg exportConfig) map[string]interface{} {
 		}
 	}
 	return view
+}
+
+// exportVolumeMountedHere reports whether this pod's EXPORT_ROOT mount is the
+// same physical volume the export Job in jobNamespace wrote to. PVCs are
+// namespace-scoped, so that's only true when the Job ran in this pod's own
+// namespace — every other namespace got its own PVC via ensureExportPVC.
+// cfg.PodNamespace unset (e.g. running out-of-cluster in dev) is treated as
+// "trust cfg.Root", matching the historical single-namespace behaviour.
+func exportVolumeMountedHere(jobNamespace string, cfg exportConfig) bool {
+	if cfg.Root == "" {
+		return false
+	}
+	if cfg.PodNamespace == "" {
+		return true
+	}
+	return jobNamespace == cfg.PodNamespace
 }
 
 func jobPhase(job *batchv1.Job) string {
@@ -602,6 +687,12 @@ func DownloadExportHandler(clients *K8sClients) http.HandlerFunc {
 		job, err := clients.Clientset.BatchV1().Jobs(vars["namespace"]).Get(r.Context(), exportJobName(vars["id"]), metav1.GetOptions{})
 		if err != nil {
 			respondWithError(w, http.StatusNotFound, "Export not found: "+err.Error())
+			return
+		}
+		if !exportVolumeMountedHere(job.Namespace, cfg) {
+			respondWithError(w, http.StatusServiceUnavailable, fmt.Sprintf(
+				"The export volume for namespace %q is not mounted in this pod; fetch the OVA from the export share directly",
+				job.Namespace))
 			return
 		}
 		target := job.Annotations[exportAnnTargetName]

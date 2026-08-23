@@ -81,10 +81,24 @@ spec:
             # VM export. EXPORT_ROOT is this pod's view of the shared volume
             # (used to read worker status files and serve downloads);
             # EXPORT_PVC and EXPORT_IMAGE are what the export Jobs are given.
+            # A VM's export Job runs in the VM's own namespace (a PVC cannot be
+            # mounted across namespaces), so for any VM outside this release's
+            # namespace the app auto-creates an EXPORT_PVC-named claim there
+            # using EXPORT_STORAGE_CLASS/EXPORT_STORAGE_SIZE. POD_NAMESPACE lets
+            # it tell whether EXPORT_ROOT is that export's actual volume before
+            # trusting it for progress/downloads.
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
             - name: EXPORT_ROOT
               value: {{ .Values.export.storage.mountPath | quote }}
             - name: EXPORT_PVC
               value: {{ include "vm-import-ui.exportClaimName" . | quote }}
+            - name: EXPORT_STORAGE_CLASS
+              value: {{ .Values.export.storage.storageClass | quote }}
+            - name: EXPORT_STORAGE_SIZE
+              value: {{ .Values.export.storage.size | quote }}
             - name: EXPORT_IMAGE
               value: "{{ .Values.export.image.repository | default .Values.image.repository }}:{{ .Values.export.image.tag | default .Values.image.tag | default .Chart.AppVersion }}"
             - name: EXPORT_MAX_CONCURRENT

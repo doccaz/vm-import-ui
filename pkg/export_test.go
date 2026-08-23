@@ -2,11 +2,13 @@
 package main
 
 import (
+	"context"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func testExportSpec() ExportSpec {
@@ -226,5 +228,84 @@ func TestLoadExportConfig_RespectsOverrides(t *testing.T) {
 	}
 	if c.FSGroup == nil || *c.FSGroup != 2000 {
 		t.Errorf("FSGroup = %v, want 2000", c.FSGroup)
+	}
+}
+
+// Regression: the export Job runs in the VM's own namespace (a PVC cannot be
+// mounted across namespaces), but a chart-created export PVC only exists in
+// the release namespace. Exporting a VM anywhere else scheduled the Job with
+// "persistentvolumeclaim ... not found" forever. ensureExportPVC must
+// provision the claim in the VM's namespace on first use.
+func TestEnsureExportPVC_CreatesClaimInVMNamespace(t *testing.T) {
+	clients := newTestClients()
+	cfg := exportConfig{PVC: "exports", StorageClass: "nfs", StorageSize: "50Gi"}
+
+	if err := ensureExportPVC(context.Background(), clients, "labs", cfg); err != nil {
+		t.Fatalf("ensureExportPVC: %v", err)
+	}
+
+	pvc, err := clients.Clientset.CoreV1().PersistentVolumeClaims("labs").Get(context.Background(), "exports", metav1.GetOptions{})
+	if err != nil {
+		t.Fatalf("expected PVC to be created in labs: %v", err)
+	}
+	if got := pvc.Spec.Resources.Requests[corev1.ResourceStorage]; got.String() != "50Gi" {
+		t.Errorf("storage request = %s, want 50Gi", got.String())
+	}
+	if pvc.Spec.StorageClassName == nil || *pvc.Spec.StorageClassName != "nfs" {
+		t.Errorf("storageClassName = %v, want nfs", pvc.Spec.StorageClassName)
+	}
+	found := false
+	for _, m := range pvc.Spec.AccessModes {
+		if m == corev1.ReadWriteMany {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("accessModes = %v, want ReadWriteMany", pvc.Spec.AccessModes)
+	}
+}
+
+func TestEnsureExportPVC_LeavesExistingClaimAlone(t *testing.T) {
+	existing := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{Name: "exports", Namespace: "labs"},
+	}
+	clients := newTestClients(existing)
+	cfg := exportConfig{PVC: "exports", StorageSize: "200Gi"}
+
+	if err := ensureExportPVC(context.Background(), clients, "labs", cfg); err != nil {
+		t.Fatalf("ensureExportPVC: %v", err)
+	}
+	pvc, err := clients.Clientset.CoreV1().PersistentVolumeClaims("labs").Get(context.Background(), "exports", metav1.GetOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pvc.Spec.AccessModes) != 0 {
+		t.Errorf("existing PVC spec was overwritten: %+v", pvc.Spec)
+	}
+}
+
+// Regression: the API pod's EXPORT_ROOT mount is a different physical volume
+// than an export Job's PVC whenever the Job ran outside this pod's own
+// namespace. Before this check, exportView/DownloadExportHandler read (or
+// tried to read) the wrong volume and either silently omitted progress fields
+// or reported a real OVA as "not found".
+func TestExportVolumeMountedHere(t *testing.T) {
+	cases := []struct {
+		name         string
+		jobNamespace string
+		cfg          exportConfig
+		want         bool
+	}{
+		{"root not mounted", "labs", exportConfig{Root: "", PodNamespace: "vm-import-ui"}, false},
+		{"same namespace as this pod", "vm-import-ui", exportConfig{Root: "/export", PodNamespace: "vm-import-ui"}, true},
+		{"different namespace", "labs", exportConfig{Root: "/export", PodNamespace: "vm-import-ui"}, false},
+		{"pod namespace unknown trusts root", "labs", exportConfig{Root: "/export", PodNamespace: ""}, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := exportVolumeMountedHere(tc.jobNamespace, tc.cfg); got != tc.want {
+				t.Errorf("exportVolumeMountedHere(%q, %+v) = %v, want %v", tc.jobNamespace, tc.cfg, got, tc.want)
+			}
+		})
 	}
 }

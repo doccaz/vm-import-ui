@@ -83,8 +83,13 @@ export:
   storage:
     # Use an existing RWX claim (e.g. backed by NFS). Takes precedence.
     existingClaim: ""
-    # Or let the chart create one.
+    # Or let the chart create one in this release's own namespace.
     create: false
+    # storageClass and size are also handed to the app (EXPORT_STORAGE_CLASS /
+    # EXPORT_STORAGE_SIZE) and reused whenever it auto-creates a same-named
+    # claim in a VM's namespace — a VM's export Job runs there, not here, since
+    # a PVC cannot be mounted across namespaces. See "Cross-namespace export
+    # storage" in docs/architecture-notes.md.
     storageClass: ""
     size: 200Gi
     accessMode: ReadWriteMany
