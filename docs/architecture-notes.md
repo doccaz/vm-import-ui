@@ -236,9 +236,15 @@ enforced this for us; reading PVCs directly makes it ours to enforce:
 | Chunking via `ovf:chunkSize`, 9-digit suffixes | 542–556 | `PlanChunks` |
 | Descriptor validates against DSP8023 | 493 | vendored XSD + `xmllint` |
 
-**USTAR caps a member at 8 GiB − 1** (12-byte octal size field). Real disks
-exceed that, so files over 2 GiB are chunked — which is the spec's own remedy for
-"file size restrictions on certain file systems", not a workaround.
+**USTAR caps a member at 8 GiB − 1** (12-byte octal size field). Real disks can
+exceed that, so files over that limit are chunked — which is the spec's own
+remedy for "file size restrictions on certain file systems", not a workaround.
+`defaultChunkSize` is pinned to the USTAR cap itself, not DSP0243 Annex D.4's
+2 GiB worked-example value: chunking below the point where it's structurally
+required buys nothing and costs compatibility — `virt-v2v`'s `-i ova` input
+misreads multiple chunk files as a VMware CBT snapshot chain and silently
+converts only the last one instead of the whole disk
+([libguestfs/virt-v2v#189](https://github.com/libguestfs/virt-v2v/issues/189)).
 
 ### Profiles
 

@@ -36,10 +36,16 @@ const (
 	// every member name must fit here on its own.
 	ustarMaxNameLen = 100
 
-	// defaultChunkSize is the size at which referenced files are split. DSP0243
-	// Annex D.4 uses 2 GiB in its worked example; it is comfortably below the
-	// USTAR limit and is what mainstream producers emit.
-	defaultChunkSize = int64(2) << 30
+	// defaultChunkSize is the size at which referenced files are split. Chunking
+	// exists solely to work around the USTAR 8 GiB-1 member cap (clause
+	// 542-556), so this is pinned to that cap rather than to DSP0243 Annex
+	// D.4's 2 GiB worked example: a smaller default chunks disks that would
+	// otherwise fit in one member for no spec-mandated reason, and at least one
+	// real consumer, virt-v2v's -i ova input (see
+	// https://github.com/libguestfs/virt-v2v/issues/189), misreads multiple
+	// chunk files as a VMware CBT snapshot chain and silently reads only the
+	// last one — so a disk that never needed chunking should never get it.
+	defaultChunkSize = ustarMaxMemberSize
 )
 
 // OvaFile is one file referenced from the OVF descriptor's <References> section,
