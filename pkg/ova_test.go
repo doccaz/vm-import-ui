@@ -204,6 +204,55 @@ func TestPlanChunks_NoChunkingAtOrBelowThreshold(t *testing.T) {
 	}
 }
 
+// Every chunk but the last must be a whole number of 512-byte sectors, so that
+// a consumer can map the chunks back into one disk without copying them (see
+// chunkAlign). A disk that fits in a single USTAR member must still not be
+// chunked at all, even though the chunk size is smaller than that limit.
+func TestPlanChunks_ChunksAreSectorAligned(t *testing.T) {
+	const size = ustarMaxMemberSize + 1
+	chunks, sizes, err := PlanChunks([]OvaFile{zeroFile("big.vmdk", size)}, defaultChunkSize)
+	if err != nil {
+		t.Fatalf("PlanChunks: %v", err)
+	}
+	declared := sizes["big.vmdk"]
+	if declared%chunkAlign != 0 || declared > ustarMaxMemberSize || declared <= 0 {
+		t.Fatalf("declared chunk size %d must be a positive multiple of %d within the USTAR limit", declared, chunkAlign)
+	}
+	if len(chunks) < 2 {
+		t.Fatalf("got %d chunks, want the disk split", len(chunks))
+	}
+	var total int64
+	for i, c := range chunks {
+		if i < len(chunks)-1 && c.Size != declared {
+			t.Errorf("chunk %s is %d bytes, want %d", c.Name, c.Size, declared)
+		}
+		total += c.Size
+	}
+	if total != size {
+		t.Errorf("chunks add up to %d bytes, want %d", total, size)
+	}
+
+	// Exactly at the USTAR limit the disk still fits in one member.
+	chunks, sizes, err = PlanChunks([]OvaFile{zeroFile("fits.vmdk", ustarMaxMemberSize)}, defaultChunkSize)
+	if err != nil {
+		t.Fatalf("PlanChunks: %v", err)
+	}
+	if len(chunks) != 1 || len(sizes) != 0 {
+		t.Errorf("a disk of exactly the USTAR limit must not be chunked, got %d chunks", len(chunks))
+	}
+}
+
+// A chunk size below the alignment must not round down to zero (an endless loop).
+func TestPlanChunks_TinyChunkSizeStillTerminates(t *testing.T) {
+	chunks, sizes, err := PlanChunks([]OvaFile{zeroFile("d.vmdk", 10)}, 3)
+	if err != nil {
+		t.Fatalf("PlanChunks: %v", err)
+	}
+	if sizes["d.vmdk"] != 3 || len(chunks) != 4 {
+		t.Errorf("got chunk size %d in %d chunks, want 3 in 4", sizes["d.vmdk"], len(chunks))
+	}
+}
+
 // Clause 542-556 and Annex D.4: chunk-number is exactly 9 decimal digits, 0-based.
 func TestPlanChunks_SuffixesAndSizes(t *testing.T) {
 	const chunkSize = int64(1024)
@@ -260,8 +309,8 @@ func TestWriteOVA_OverEightGiBStaysUstar(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PlanChunks: %v", err)
 	}
-	if sizes["big.vmdk"] != defaultChunkSize {
-		t.Fatalf("expected the file to be chunked")
+	if sizes["big.vmdk"] != defaultChunkSize&^(chunkAlign-1) {
+		t.Fatalf("expected the file to be chunked at %d, got %d", defaultChunkSize&^(chunkAlign-1), sizes["big.vmdk"])
 	}
 	for _, c := range chunks {
 		if c.Size > ustarMaxMemberSize {
