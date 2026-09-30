@@ -283,7 +283,7 @@ cd frontend && npx react-scripts test --watchAll=false
 | `EXPORT_PVC` | — | ReadWriteMany claim the export Jobs mount |
 | `EXPORT_IMAGE` | — | Image the export Jobs run (normally this same image) |
 | `EXPORT_MAX_CONCURRENT` | `2` | Maximum simultaneous export Jobs |
-| `EXPORT_TTL_SECONDS` | `3600` | How long finished export Jobs are kept |
+| `EXPORT_TTL_SECONDS` | `0` | Seconds a finished export Job is kept; `0` keeps it until the export is deleted in the UI (which also removes the OVA). If a Job expires, its OVA stays on the volume but can no longer be listed, downloaded or deleted from the UI |
 | `EXPORT_DOWNLOAD_MAX_BYTES` | `2147483648` | Server-side cap on browser downloads |
 | `EXPORT_RUN_AS_USER` / `EXPORT_FS_GROUP` | `0` | Export Job security context (block devices land as `root:disk`) |
 

@@ -539,7 +539,7 @@ As of Rancher 2.10+, that main product UI is itself shipped as a Rancher UI Exte
 | `EXPORT_STORAGE_SIZE` | `200Gi` | Size for an `EXPORT_PVC` auto-created in a VM's namespace |
 | `POD_NAMESPACE` | — | This pod's own namespace (downward API). Used to tell whether `EXPORT_ROOT` is actually the export's volume before trusting it for progress/downloads — unset falls back to always trusting `EXPORT_ROOT`, matching single-namespace behaviour |
 | `EXPORT_MAX_CONCURRENT` | `2` | Simultaneous export Jobs |
-| `EXPORT_TTL_SECONDS` | `3600` | How long finished export Jobs are kept |
+| `EXPORT_TTL_SECONDS` | `0` | Seconds a finished export Job is kept; `0` keeps it until the export is deleted in the UI (which also removes the OVA). If a Job expires, its OVA stays on the volume but can no longer be listed, downloaded or deleted from the UI |
 | `EXPORT_DOWNLOAD_MAX_BYTES` | `2147483648` | Server-side cap on browser downloads |
 | `EXPORT_RUN_AS_USER` / `EXPORT_FS_GROUP` | `0` | Job security context; block devices land as `root:disk` |
 | `EXPORT_SPEC` | — | Worker only: the JSON instruction set |
