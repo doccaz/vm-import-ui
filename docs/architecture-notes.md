@@ -286,8 +286,27 @@ the attribute.
   is what the API lists. Restart-safe and replica-safe, with no extra RBAC.
 - **The worker has no cluster access** (`automountServiceAccountToken: false`).
   Its whole instruction set arrives via `EXPORT_SPEC` and mounted volumes.
-- **One binary, two modes.** `vm-import-ui export-worker` runs inside the Job;
-  same image, one version to keep in sync. The image carries `qemu-img`.
+- **One binary, three modes.** `vm-import-ui export-worker` runs inside the Job and
+  `vm-import-ui export-cleanup` removes an export's files (below); the third is the
+  API server. Same image, one version to keep in sync. The image carries `qemu-img`.
+- **Keep the Job until it is deleted.** It is the only handle on an export, so its
+  TTL defaults to off (`EXPORT_TTL_SECONDS=0`, leaving `ttlSecondsAfterFinished`
+  unset: a value of 0 would make Kubernetes delete it immediately). If it expires,
+  the OVA and `.vm-import-ui/<id>/` stay on the volume and nothing can list,
+  download or delete them.
+- **Deleting an export (`DELETE .../exports/{ns}/{id}?purge=true`) removes the
+  files as well, and where they live decides how.** The API pod mounts only its
+  own namespace's export volume, and PVCs cannot be mounted across namespaces.
+  For an export in the pod's namespace the files are removed in-process. For any
+  other namespace the API creates a short-lived `vm-export-cleanup-<id>` Job in
+  the export's namespace that mounts that namespace's export PVC and runs
+  `export-cleanup` (env-driven, no shell, same `safeExportPath` checks; the id must
+  be hex, because an empty one would resolve to `.vm-import-ui` and wipe every
+  export's state). The export Job is deleted only after cleanup succeeded or was
+  scheduled, since it is the record to retry from. A running export gets a 30 s
+  delay so its pod has stopped before files are removed. Cleanup Jobs carry
+  `export-cleanup=<id>`, not the export marker label, so they are never listed as
+  exports, and they expire after an hour.
 - **`backoffLimit: 0`** — retrying re-reads and re-converts every byte.
 - **Progress** is a `status.json` on the export volume, since the worker cannot
   talk to the API server. The API falls back to Job status plus pod logs.

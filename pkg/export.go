@@ -493,7 +493,17 @@ func GetExportHandler(clients *K8sClients) http.HandlerFunc {
 }
 
 // DeleteExportHandler removes the export Job (and its pods). Pass purge=true to
-// delete the produced .ova as well.
+// delete the produced .ova and its status folder as well.
+//
+// Where the files are decides how they are removed. The API pod mounts only its
+// own namespace's export volume, so:
+//   - export in this pod's namespace: the files are removed here;
+//   - export in any other namespace: a cleanup Job is started in that
+//     namespace, where the right volume can be mounted.
+//
+// The Job is deleted only after the files are dealt with (or scheduled), because
+// it is the export's only record: deleting it first and then failing would
+// strand the OVA with nothing left to retry from.
 func DeleteExportHandler(clients *K8sClients) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
@@ -506,17 +516,45 @@ func DeleteExportHandler(clients *K8sClients) http.HandlerFunc {
 			return
 		}
 
-		if r.URL.Query().Get("purge") == "true" && cfg.Root != "" {
+		resp := map[string]string{"message": "Export deleted"}
+		if r.URL.Query().Get("purge") == "true" {
 			target := job.Annotations[exportAnnTargetName]
-			if target != "" {
-				if p, err := safeExportPath(cfg.Root, target+".ova"); err == nil {
-					if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
-						log.Warnf("Could not delete %s: %v", p, err)
+			if exportVolumeMountedHere(job.Namespace, cfg) {
+				if err := removeExportFiles(cfg.Root, id, target); err != nil {
+					log.Errorf("Could not remove files of export %s/%s: %v", ns, id, err)
+					respondWithError(w, http.StatusInternalServerError,
+						"Could not remove the export's files, so the export was kept: "+err.Error())
+					return
+				}
+			} else {
+				delay := 0
+				if job.Status.Active > 0 {
+					delay = exportCleanupActiveDelay
+				}
+				cj, err := buildExportCleanupJob(ExportCleanupJobOptions{
+					Namespace:    job.Namespace,
+					Image:        cfg.Image,
+					ExportPVC:    cfg.PVC,
+					ExportID:     id,
+					TargetName:   target,
+					DelaySeconds: delay,
+					RunAsUser:    cfg.RunAsUser,
+					FSGroup:      cfg.FSGroup,
+				})
+				if err == nil {
+					_, err = clients.Clientset.BatchV1().Jobs(job.Namespace).Create(r.Context(), cj, metav1.CreateOptions{})
+					if errors.IsAlreadyExists(err) {
+						err = nil // a repeated click; the first Job is already on it
 					}
 				}
-			}
-			if p, err := safeExportPath(cfg.Root, filepath.Join(".vm-import-ui", id)); err == nil {
-				os.RemoveAll(p)
+				if err != nil {
+					log.Errorf("Could not start cleanup for export %s/%s: %v", ns, id, err)
+					respondWithError(w, http.StatusInternalServerError,
+						"Could not start the cleanup of the export's files, so the export was kept: "+err.Error())
+					return
+				}
+				resp["cleanupJob"] = exportCleanupJobName(id)
+				resp["message"] = "Export deleted; its files are being removed by a cleanup job in namespace " + job.Namespace
 			}
 		}
 
@@ -526,7 +564,7 @@ func DeleteExportHandler(clients *K8sClients) http.HandlerFunc {
 			respondWithError(w, http.StatusInternalServerError, "Failed to delete export: "+err.Error())
 			return
 		}
-		respondWithJSON(w, http.StatusOK, map[string]string{"message": "Export deleted"})
+		respondWithJSON(w, http.StatusOK, resp)
 	}
 }
 

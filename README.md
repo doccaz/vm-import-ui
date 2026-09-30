@@ -287,6 +287,8 @@ cd frontend && npx react-scripts test --watchAll=false
 | `EXPORT_DOWNLOAD_MAX_BYTES` | `2147483648` | Server-side cap on browser downloads |
 | `EXPORT_RUN_AS_USER` / `EXPORT_FS_GROUP` | `0` | Export Job security context (block devices land as `root:disk`) |
 
+> **Upgrading with Helm:** `helm upgrade --reuse-values` reuses the *previous release's computed values, including the old chart's defaults*, so it keeps a previous default such as `export.ttlSecondsAfterFinished: 3600` instead of picking up a new one. Use `--reset-then-reuse-values` (keeps only the values you set yourself, takes new chart defaults), or set the value explicitly.
+
 ---
 
 ## Latest Release (v1.9.1)

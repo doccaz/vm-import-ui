@@ -21,6 +21,12 @@ func main() {
 		}
 		os.Exit(RunExportWorker())
 	}
+	// Removes one export's files from an export volume, inside a short-lived Job
+	// in the export's namespace (see export_cleanup.go).
+	if len(os.Args) > 1 && os.Args[1] == "export-cleanup" {
+		log.SetFormatter(&log.JSONFormatter{})
+		os.Exit(RunExportCleanup())
+	}
 
 	// Fix MIME types for serving static files
 	mime.AddExtensionType(".js", "application/javascript")
