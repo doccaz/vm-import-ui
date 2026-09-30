@@ -90,6 +90,55 @@ func TestBuildExportJob_NeverRetries(t *testing.T) {
 	}
 }
 
+// The Job is the export's only record: list, download and delete all start
+// from it. If Kubernetes expires it, the OVA is stranded on the volume with no
+// way to list, fetch or remove it. So by default the Job must be kept until
+// deleted. Beware: a TTLSecondsAfterFinished of 0 means "delete immediately" to
+// Kubernetes, so "keep" has to be nil, never a pointer to 0.
+func TestBuildExportJob_KeepsRecordUntilDeletedByDefault(t *testing.T) {
+	job, err := buildExportJob(testExportSpec(), ExportJobOptions{
+		Namespace: "labs", Image: "img:1", ExportPVC: "exports", SourceClaims: []string{"c"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if job.Spec.TTLSecondsAfterFinished != nil {
+		t.Errorf("TTLSecondsAfterFinished = %d, want unset: an expiring Job strands its OVA",
+			*job.Spec.TTLSecondsAfterFinished)
+	}
+}
+
+func TestBuildExportJob_HonoursExplicitTTL(t *testing.T) {
+	job, err := buildExportJob(testExportSpec(), ExportJobOptions{
+		Namespace: "labs", Image: "img:1", ExportPVC: "exports", SourceClaims: []string{"c"},
+		TTLSeconds: 86400,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if job.Spec.TTLSecondsAfterFinished == nil || *job.Spec.TTLSecondsAfterFinished != 86400 {
+		t.Errorf("TTLSecondsAfterFinished = %v, want 86400", job.Spec.TTLSecondsAfterFinished)
+	}
+}
+
+func TestLoadExportConfig_TTL(t *testing.T) {
+	t.Setenv("EXPORT_TTL_SECONDS", "")
+	if c := loadExportConfig(); c.TTLSeconds != 0 {
+		t.Errorf("default TTLSeconds = %d, want 0 (keep until deleted)", c.TTLSeconds)
+	}
+	t.Setenv("EXPORT_TTL_SECONDS", "7200")
+	if c := loadExportConfig(); c.TTLSeconds != 7200 {
+		t.Errorf("TTLSeconds = %d, want 7200", c.TTLSeconds)
+	}
+	// Garbage and negatives fall back to the default rather than expiring Jobs.
+	for _, bad := range []string{"abc", "-5"} {
+		t.Setenv("EXPORT_TTL_SECONDS", bad)
+		if c := loadExportConfig(); c.TTLSeconds != 0 {
+			t.Errorf("EXPORT_TTL_SECONDS=%q gave %d, want 0", bad, c.TTLSeconds)
+		}
+	}
+}
+
 func TestBuildExportJob_SpecRoundTrips(t *testing.T) {
 	spec := testExportSpec()
 	job, err := buildExportJob(spec, ExportJobOptions{
