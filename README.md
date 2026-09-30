@@ -287,9 +287,25 @@ cd frontend && npx react-scripts test --watchAll=false
 | `EXPORT_DOWNLOAD_MAX_BYTES` | `2147483648` | Server-side cap on browser downloads |
 | `EXPORT_RUN_AS_USER` / `EXPORT_FS_GROUP` | `0` | Export Job security context (block devices land as `root:disk`) |
 
+> **Upgrading with Helm:** `helm upgrade --reuse-values` reuses the *previous release's computed values, including the old chart's defaults*, so it keeps a previous default such as `export.ttlSecondsAfterFinished: 3600` instead of picking up a new one. Use `--reset-then-reuse-values` (keeps only the values you set yourself, takes new chart defaults), or set the value explicitly.
+
 ---
 
-## Latest Release (v1.9.1)
+## Latest Release (v1.9.2)
+
+**Deleting an export now removes its files in every namespace.**
+
+- Deleting an export with purge used to remove files only under the API pod's own
+  export volume. For a VM in any other namespace the OVA and its status folder were
+  left behind after the export's record was deleted, and a same-named OVA on the
+  pod's own volume could be removed instead. A short-lived cleanup Job now runs in
+  the export's namespace and removes the files there; the export is kept if that
+  cannot be scheduled, so the delete can be retried.
+- Docs: the `helm upgrade --reuse-values` pitfall that keeps an old chart default.
+
+---
+
+## Release (v1.9.1)
 
 **Export records are kept until deleted.**
 
