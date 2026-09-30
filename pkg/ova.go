@@ -36,10 +36,26 @@ const (
 	// every member name must fit here on its own.
 	ustarMaxNameLen = 100
 
-	// defaultChunkSize is the size at which referenced files are split. DSP0243
-	// Annex D.4 uses 2 GiB in its worked example; it is comfortably below the
-	// USTAR limit and is what mainstream producers emit.
-	defaultChunkSize = int64(2) << 30
+	// defaultChunkSize is the size at which referenced files are split. Chunking
+	// exists solely to work around the USTAR 8 GiB-1 member cap (clause
+	// 542-556), so this is pinned to that cap rather than to DSP0243 Annex
+	// D.4's 2 GiB worked example: a smaller default chunks disks that would
+	// otherwise fit in one member for no spec-mandated reason, and at least one
+	// real consumer, virt-v2v's -i ova input (see
+	// https://github.com/libguestfs/virt-v2v/issues/189), misreads multiple
+	// chunk files as a VMware CBT snapshot chain and silently reads only the
+	// last one — so a disk that never needed chunking should never get it.
+	defaultChunkSize = ustarMaxMemberSize
+
+	// chunkAlign is the granularity chunk sizes are rounded down to. A file only
+	// fits in a single USTAR member up to defaultChunkSize, but once a disk does
+	// have to be split, every chunk except the last is made a whole number of
+	// 512-byte sectors. 2^33-1 is 511 bytes short of that, and a consumer that
+	// wants to stitch the chunks back together without copying them (virt-v2v
+	// builds a VMDK descriptor with one FLAT extent per chunk, counted in
+	// sectors) can only do so when the chunks are sector aligned; otherwise it
+	// has to copy the whole disk into a temporary file first.
+	chunkAlign = 512
 )
 
 // OvaFile is one file referenced from the OVF descriptor's <References> section,
@@ -98,6 +114,11 @@ func LocalFile(path string) func(int64) (io.ReadCloser, error) {
 
 // PlanChunks splits files that exceed chunkSize into spec-conformant chunks.
 //
+// chunkSize is the size above which a file is split. The chunks themselves are
+// chunkSize rounded down to a multiple of chunkAlign (unless that would be
+// zero), so that every chunk but the last is sector aligned; that rounded value
+// is what the descriptor must declare as ovf:chunkSize.
+//
 // It returns the ordered tar members and, for each file that was actually split,
 // the ovf:chunkSize value the descriptor must declare. Files that fit in a single
 // chunk are absent from that map and keep their plain name — emitting a
@@ -133,9 +154,13 @@ func PlanChunks(files []OvaFile, chunkSize int64) ([]Chunk, map[string]int64, er
 			continue
 		}
 
-		sizes[f.Name] = chunkSize
-		for offset, n := int64(0), 0; offset < f.Size; offset, n = offset+chunkSize, n+1 {
-			size := chunkSize
+		slice := chunkSize
+		if aligned := chunkSize &^ (chunkAlign - 1); aligned > 0 {
+			slice = aligned
+		}
+		sizes[f.Name] = slice
+		for offset, n := int64(0), 0; offset < f.Size; offset, n = offset+slice, n+1 {
+			size := slice
 			if remaining := f.Size - offset; remaining < size {
 				size = remaining
 			}

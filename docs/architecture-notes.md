@@ -236,9 +236,22 @@ enforced this for us; reading PVCs directly makes it ours to enforce:
 | Chunking via `ovf:chunkSize`, 9-digit suffixes | 542–556 | `PlanChunks` |
 | Descriptor validates against DSP8023 | 493 | vendored XSD + `xmllint` |
 
-**USTAR caps a member at 8 GiB − 1** (12-byte octal size field). Real disks
-exceed that, so files over 2 GiB are chunked — which is the spec's own remedy for
-"file size restrictions on certain file systems", not a workaround.
+**USTAR caps a member at 8 GiB − 1** (12-byte octal size field). Real disks can
+exceed that, so files over that limit are chunked — which is the spec's own
+remedy for "file size restrictions on certain file systems", not a workaround.
+`defaultChunkSize` is pinned to the USTAR cap itself, not DSP0243 Annex D.4's
+2 GiB worked-example value: chunking below the point where it's structurally
+required buys nothing and costs compatibility — `virt-v2v`'s `-i ova` input
+misreads multiple chunk files as a VMware CBT snapshot chain and silently
+converts only the last one instead of the whole disk
+([libguestfs/virt-v2v#189](https://github.com/libguestfs/virt-v2v/issues/189)).
+
+When a disk does have to be split, the chunk size is rounded down to a multiple
+of 512 (`chunkAlign`), i.e. `2^33 - 512` rather than `2^33 - 1`. A disk that fits
+in one member is still not chunked. The alignment lets a consumer present the
+chunks as one disk without copying them (`virt-v2v` can describe them as one
+VMDK with a `FLAT` extent per chunk, counted in sectors); with unaligned chunks
+it has to concatenate the whole disk into a temporary file first.
 
 ### Profiles
 
