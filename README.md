@@ -291,7 +291,21 @@ cd frontend && npx react-scripts test --watchAll=false
 
 ---
 
-## Latest Release (v1.9.1)
+## Latest Release (v1.9.2)
+
+**Deleting an export now removes its files in every namespace.**
+
+- Deleting an export with purge used to remove files only under the API pod's own
+  export volume. For a VM in any other namespace the OVA and its status folder were
+  left behind after the export's record was deleted, and a same-named OVA on the
+  pod's own volume could be removed instead. A short-lived cleanup Job now runs in
+  the export's namespace and removes the files there; the export is kept if that
+  cannot be scheduled, so the delete can be retried.
+- Docs: the `helm upgrade --reuse-values` pitfall that keeps an old chart default.
+
+---
+
+## Release (v1.9.1)
 
 **Export records are kept until deleted.**
 
