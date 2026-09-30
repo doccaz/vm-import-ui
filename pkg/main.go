@@ -11,6 +11,17 @@ import (
 )
 
 func main() {
+	// The same binary runs in two modes: the API server, and the worker that
+	// performs one export inside a Kubernetes Job. Keeping them in one binary
+	// means one image, one version and one build to keep in sync.
+	if len(os.Args) > 1 && os.Args[1] == "export-worker" {
+		log.SetFormatter(&log.JSONFormatter{})
+		if lvl, err := log.ParseLevel(os.Getenv("LOG_LEVEL")); err == nil {
+			log.SetLevel(lvl)
+		}
+		os.Exit(RunExportWorker())
+	}
+
 	// Fix MIME types for serving static files
 	mime.AddExtensionType(".js", "application/javascript")
 	mime.AddExtensionType(".css", "text/css")
@@ -72,6 +83,15 @@ func main() {
 	api.HandleFunc("/harvester/vlanconfigs", ListVlanConfigsHandler(k8sClients)).Methods("GET")
 	api.HandleFunc("/harvester/storageclasses", ListStorageClassesHandler(k8sClients)).Methods("GET")
 	api.HandleFunc("/harvester/virtualmachines/{namespace}", ListVMsHandler(k8sClients)).Methods("GET")
+	// Cluster-wide Harvester VM inventory, for the VM Export page.
+	api.HandleFunc("/harvester/inventory", HandleGetHarvesterInventory(k8sClients)).Methods("GET")
+	api.HandleFunc("/exports/preview", PreviewOVFHandler(k8sClients)).Methods("POST")
+	api.HandleFunc("/exports", ListExportsHandler(k8sClients)).Methods("GET")
+	api.HandleFunc("/exports", CreateExportHandler(k8sClients)).Methods("POST")
+	api.HandleFunc("/exports/{namespace}/{id}", GetExportHandler(k8sClients)).Methods("GET")
+	api.HandleFunc("/exports/{namespace}/{id}", DeleteExportHandler(k8sClients)).Methods("DELETE")
+	api.HandleFunc("/exports/{namespace}/{id}/logs", GetExportLogsHandler(k8sClients)).Methods("GET")
+	api.HandleFunc("/exports/{namespace}/{id}/download", DownloadExportHandler(k8sClients)).Methods("GET")
 
 	// Forklift Handlers
 	api.HandleFunc("/forklift/availability", CheckForkliftAvailability(k8sClients)).Methods("GET")

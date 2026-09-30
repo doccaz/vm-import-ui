@@ -1350,7 +1350,7 @@ func CreateForkliftProviderHandler(clients *K8sClients) http.HandlerFunc {
 					"createdForResourceType": "providers",
 				},
 			},
-			Type: v1.SecretTypeOpaque,
+			Type:       v1.SecretTypeOpaque,
 			StringData: secretData,
 		}
 		_, err := clients.Clientset.CoreV1().Secrets(payload.Namespace).Create(context.TODO(), secret, metav1.CreateOptions{})
@@ -2372,4 +2372,3 @@ func GetForkliftMigrationStatus(clients *K8sClients) http.HandlerFunc {
 		respondWithJSON(w, http.StatusOK, map[string]interface{}{"message": "No migration found for this plan"})
 	}
 }
-

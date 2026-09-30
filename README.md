@@ -53,6 +53,43 @@ Both engines are available from the same wizard. Select the one that best fits y
 - **Full lifecycle**: run, cancel, delete migration; delete plan with cleanup of NetworkMap + StorageMap
 - **YAML view** for Plans, NetworkMaps, StorageMaps, and Migration CRs
 
+### VM Export (Harvester → OVA)
+
+Export a Harvester VM back out as a standards-conformant **OVA** (DMTF DSP0243),
+for vSphere/ESXi, VirtualBox, Proxmox or plain KVM.
+
+- **Cluster-wide VM browser** grouped by namespace, showing vCPUs, memory,
+  firmware, disks and NICs, with per-VM export eligibility
+- **Three target profiles**:
+  - `vmware` — OVF 1.1 with VMware extensions, LSI Logic SCSI + E1000E, stream-optimized VMDK
+  - `portable` — strict OVF 1.0, no vendor extensions, E1000 (VirtualBox, Proxmox, oVirt)
+  - `faithful` — virtio preserved, qcow2 disks, for lossless KVM/libvirt round-trips
+- **Preview the OVF descriptor** before exporting, without touching the cluster
+- Runs as a **Kubernetes Job**: mounts the VM's disks read-only, converts with
+  `qemu-img`, and writes the OVA to a shared ReadWriteMany volume
+- **Large disks are chunked** per DSP0243 (`ovf:chunkSize`), because a strict
+  USTAR tar member cannot exceed 8 GiB
+- Live progress, per-export logs, and an optional browser download
+
+> **The VM must be powered off.** Harvester's disks are ReadWriteMany block
+> volumes, so reading one while the VM runs produces a torn, unusable image and
+> nothing in Kubernetes prevents it. The UI blocks running VMs and the API
+> re-checks immediately before starting.
+
+> **Prepare the guest first** for the `vmware` and `portable` profiles. A VM
+> installed on Harvester has a virtio-only initramfs and will not find its root
+> disk after the remap to LSI Logic. Inside the VM, before powering off:
+> ```bash
+> dracut --regenerate-all --force --no-hostonly   # RHEL/SLES/Fedora
+> update-initramfs -u -k all                      # Debian/Ubuntu (MODULES=most)
+> ```
+> Verified against ESXi 8.0.3: without this the guest drops to a dracut
+> emergency shell; with it, it boots normally. See
+> [`docs/architecture-notes.md`](docs/architecture-notes.md) for the full detail,
+> including how to repair an image that was already exported.
+
+---
+
 ### General UI
 
 - **Three themes**: Light, SUSE, Dark (switchable at runtime)
@@ -224,10 +261,42 @@ cd frontend && npx react-scripts test --watchAll=false
 | `LOG_LEVEL` | `info` | Log level: `debug`, `info`, `warn`, `error` |
 | `UI_PATH` | `/ui` | Path to frontend build directory |
 | `USE_MOCK_DATA` | `false` | Run without a Kubernetes cluster (dev mode) |
+| `EXPORT_ROOT` | — | This pod's mount of the export volume. Unset disables status reads and downloads |
+| `EXPORT_PVC` | — | ReadWriteMany claim the export Jobs mount |
+| `EXPORT_IMAGE` | — | Image the export Jobs run (normally this same image) |
+| `EXPORT_MAX_CONCURRENT` | `2` | Maximum simultaneous export Jobs |
+| `EXPORT_TTL_SECONDS` | `3600` | How long finished export Jobs are kept |
+| `EXPORT_DOWNLOAD_MAX_BYTES` | `2147483648` | Server-side cap on browser downloads |
+| `EXPORT_RUN_AS_USER` / `EXPORT_FS_GROUP` | `0` | Export Job security context (block devices land as `root:disk`) |
 
 ---
 
-## Latest Release (v1.8.1)
+## Latest Release (v1.9.0)
+
+**VM Export (Harvester → OVA)** — the reverse of the import path.
+
+- New **Export VMs** page: cluster-wide VM browser grouped by namespace, with per-VM
+  disks, NICs, firmware and export eligibility
+- Three OVF target profiles — `vmware` (vSphere/ESXi), `portable` (VirtualBox,
+  Proxmox, oVirt) and `faithful` (virtio preserved, KVM/libvirt)
+- **Preview the OVF descriptor** for any VM without touching the cluster
+- Exports run as Kubernetes Jobs: disks mounted read-only, converted with
+  `qemu-img`, packaged as a DSP0243-conformant OVA on a ReadWriteMany volume
+- Disks larger than 2 GiB are **chunked** per the spec, so exports are not limited
+  by USTAR's 8 GiB per-member cap
+- Running VMs are blocked from export — their ReadWriteMany block volumes would
+  yield a torn image
+- Validated against `xmllint`/DSP8023, `virt-v2v`, VMware VDDK and `ovftool`, and
+  deployed and booted end-to-end on ESXi 8.0.3
+
+> Guests need their initramfs rebuilt without host-only mode before exporting to
+> the `vmware`/`portable` profiles — see the VM Export section above.
+
+Chart: `export.enabled=false` by default; no new RBAC unless enabled.
+
+---
+
+## Release (v1.8.1)
 
 - **Works behind a sub-path / reverse proxy** (e.g. the Rancher cluster Service proxy): the frontend now loads assets via relative paths and rewrites API calls relative to where it is served, so the in-dashboard NavLink renders fully. Direct NodePort/Ingress/podman access at the root path is unchanged.
 - **Graceful API errors instead of crashed connections**: a panic-recovery middleware returns HTTP 500 on handler panics, and the capabilities endpoint degrades to defaults when no cluster is reachable (e.g. `USE_MOCK_DATA=true`).

@@ -29,12 +29,20 @@ func formatDiskSize(bytes int64) string {
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
-// VMDisk represents a virtual disk in vCenter
+// VMDisk represents a virtual disk in vCenter or Harvester.
+// The trailing fields are Harvester-only and stay empty for vCenter inventory.
 type VMDisk struct {
 	Name     string `json:"name"`
 	Capacity int64  `json:"capacity"` // in bytes
-	BusType  string `json:"busType"`  // e.g. scsi, ide, sata, nvme
+	BusType  string `json:"busType"`  // e.g. scsi, ide, sata, nvme, virtio
 	UnitNum  int32  `json:"unitNum"`
+
+	Kind         string `json:"kind,omitempty"`         // backing: pvc, cloudinit, container, other (Harvester)
+	Device       string `json:"device,omitempty"`       // device type: disk, cdrom, lun (Harvester)
+	PVCName      string `json:"pvcName,omitempty"`      // Harvester
+	StorageClass string `json:"storageClass,omitempty"` // Harvester
+	VolumeMode   string `json:"volumeMode,omitempty"`   // Block or Filesystem (Harvester)
+	BootOrder    int32  `json:"bootOrder,omitempty"`    // Harvester
 }
 
 // VMNetwork represents a network interface in vCenter
@@ -60,6 +68,14 @@ type InventoryNode struct {
 	PowerState    string          `json:"powerState,omitempty"`
 	DatastoreID   string          `json:"datastoreId,omitempty"`
 	DatastoreName string          `json:"datastoreName,omitempty"`
+
+	// Harvester-only fields; empty for vCenter inventory.
+	Namespace      string   `json:"namespace,omitempty"`
+	Architecture   string   `json:"architecture,omitempty"`
+	Firmware       string   `json:"firmware,omitempty"` // bios or efi
+	MachineType    string   `json:"machineType,omitempty"`
+	RunStrategy    string   `json:"runStrategy,omitempty"`
+	ExportBlockers []string `json:"exportBlockers,omitempty"` // why this VM cannot be exported now
 }
 
 // GetVCenterInventory connects to vCenter and returns the inventory tree.

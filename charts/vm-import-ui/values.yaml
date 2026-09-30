@@ -72,3 +72,51 @@ nodeSelector: {}
 tolerations: []
 
 affinity: {}
+
+# ── VM Export (Harvester VM → OVA) ──────────────────────────────────────────
+# Exports run as a Kubernetes Job in the source VM's namespace. The Job mounts
+# the VM's PVCs read-only as block devices, converts them with qemu-img, and
+# writes the finished .ova to a shared ReadWriteMany volume.
+export:
+  enabled: false
+
+  storage:
+    # Use an existing RWX claim (e.g. backed by NFS). Takes precedence.
+    existingClaim: ""
+    # Or let the chart create one in this release's own namespace.
+    create: false
+    # storageClass and size are also handed to the app (EXPORT_STORAGE_CLASS /
+    # EXPORT_STORAGE_SIZE) and reused whenever it auto-creates a same-named
+    # claim in a VM's namespace — a VM's export Job runs there, not here, since
+    # a PVC cannot be mounted across namespaces. See "Cross-namespace export
+    # storage" in docs/architecture-notes.md.
+    storageClass: ""
+    size: 200Gi
+    accessMode: ReadWriteMany
+    # Where the export volume is mounted, in both this pod and the export Jobs.
+    mountPath: /export
+
+  # Maximum simultaneous export Jobs. Exact at replicaCount 1; advisory above.
+  maxConcurrent: 2
+  # How long a finished export Job is kept before Kubernetes removes it.
+  ttlSecondsAfterFinished: 3600
+  # Hard cap on a single export.
+  activeDeadlineSeconds: 21600
+  # Server-side cap on browser downloads; larger OVAs must be fetched from the
+  # share directly, because the UI materialises the response in memory.
+  downloadMaxBytes: 2147483648
+  defaultProfile: vmware
+
+  # The export Job runs the same image as the API. Leave blank to reuse it.
+  image:
+    repository: ""
+    tag: ""
+
+  # Block-mode PVCs are exposed to the Job as device nodes owned by this group.
+  # If exports fail with "permission denied" on /dev/vmdisk0, this is the knob.
+  securityContext:
+    runAsUser: 0
+    fsGroup: 0
+
+  jobResources: {}
+

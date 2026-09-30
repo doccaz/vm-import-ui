@@ -77,6 +77,44 @@ spec:
               value: /var/kubeconfig/config
             - name: LOG_LEVEL
               value: {{ .Values.env.logLevel | quote }}
+            {{- if .Values.export.enabled }}
+            # VM export. EXPORT_ROOT is this pod's view of the shared volume
+            # (used to read worker status files and serve downloads);
+            # EXPORT_PVC and EXPORT_IMAGE are what the export Jobs are given.
+            # A VM's export Job runs in the VM's own namespace (a PVC cannot be
+            # mounted across namespaces), so for any VM outside this release's
+            # namespace the app auto-creates an EXPORT_PVC-named claim there
+            # using EXPORT_STORAGE_CLASS/EXPORT_STORAGE_SIZE. POD_NAMESPACE lets
+            # it tell whether EXPORT_ROOT is that export's actual volume before
+            # trusting it for progress/downloads.
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: EXPORT_ROOT
+              value: {{ .Values.export.storage.mountPath | quote }}
+            - name: EXPORT_PVC
+              value: {{ include "vm-import-ui.exportClaimName" . | quote }}
+            - name: EXPORT_STORAGE_CLASS
+              value: {{ .Values.export.storage.storageClass | quote }}
+            - name: EXPORT_STORAGE_SIZE
+              value: {{ .Values.export.storage.size | quote }}
+            - name: EXPORT_IMAGE
+              value: "{{ .Values.export.image.repository | default .Values.image.repository }}:{{ .Values.export.image.tag | default .Values.image.tag | default .Chart.AppVersion }}"
+            - name: EXPORT_MAX_CONCURRENT
+              value: {{ .Values.export.maxConcurrent | quote }}
+            - name: EXPORT_TTL_SECONDS
+              value: {{ .Values.export.ttlSecondsAfterFinished | quote }}
+            - name: EXPORT_DOWNLOAD_MAX_BYTES
+              # int64 forces integer rendering: YAML would otherwise turn a large
+              # value into scientific notation ("2.147483648e+09"), which the
+              # backend cannot parse and would silently ignore.
+              value: {{ .Values.export.downloadMaxBytes | int64 | quote }}
+            - name: EXPORT_RUN_AS_USER
+              value: {{ .Values.export.securityContext.runAsUser | quote }}
+            - name: EXPORT_FS_GROUP
+              value: {{ .Values.export.securityContext.fsGroup | quote }}
+            {{- end }}
             - name: UI_PATH
               value: {{ .Values.env.uiPath | quote }}
             - name: USE_MOCK_DATA
@@ -107,6 +145,10 @@ spec:
             - name: kubeconfig-dir
               mountPath: /var/kubeconfig
               readOnly: true
+            {{- if .Values.export.enabled }}
+            - name: export-storage
+              mountPath: {{ .Values.export.storage.mountPath }}
+            {{- end }}
 
           {{- with .Values.resources }}
           resources:
@@ -116,6 +158,11 @@ spec:
       volumes:
         - name: kubeconfig-dir
           emptyDir: {}
+        {{- if .Values.export.enabled }}
+        - name: export-storage
+          persistentVolumeClaim:
+            claimName: {{ include "vm-import-ui.exportClaimName" . }}
+        {{- end }}
 
       {{- with .Values.nodeSelector }}
       nodeSelector:

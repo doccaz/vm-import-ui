@@ -50,6 +50,62 @@ Import Controller (`migration.harvesterhci.io`), and Forklift
 | `navLink.url` | `""` | External link URL; blank links via the in-cluster Service proxy |
 | `resources` | `{}` | Pod resource requests/limits |
 
+## VM Export (Harvester → OVA)
+
+Disabled by default. When enabled, an **Export VMs** page appears and exports run
+as Kubernetes Jobs in the source VM's namespace.
+
+```bash
+helm upgrade --install vm-import-ui . \
+  --set export.enabled=true \
+  --set export.storage.create=true \
+  --set export.storage.storageClass=harvester-longhorn
+```
+
+Or point at a volume you already have:
+
+```bash
+  --set export.enabled=true \
+  --set export.storage.existingClaim=my-nfs-exports
+```
+
+| Key | Default | Purpose |
+|-----|---------|---------|
+| `export.enabled` | `false` | Enables the feature and its RBAC |
+| `export.storage.existingClaim` | `""` | Use an existing RWX claim (takes precedence) |
+| `export.storage.create` | `false` | Let the chart create the PVC |
+| `export.storage.storageClass` | `""` | Must support **ReadWriteMany** |
+| `export.storage.size` | `200Gi` | Converted disks + finished OVA |
+| `export.storage.mountPath` | `/export` | Mount point in the pod and in export Jobs |
+| `export.maxConcurrent` | `2` | Simultaneous export Jobs |
+| `export.ttlSecondsAfterFinished` | `3600` | How long finished Jobs are kept |
+| `export.downloadMaxBytes` | `2147483648` | Server-side cap on browser downloads |
+| `export.defaultProfile` | `vmware` | `vmware`, `portable` or `faithful` |
+| `export.image.repository` / `.tag` | `""` | Override the image export Jobs run (defaults to the app image) |
+| `export.securityContext.runAsUser` / `.fsGroup` | `0` | Block devices are exposed as `root:disk` |
+| `export.jobResources` | `{}` | Resource requests/limits for export Jobs |
+
+**Sizing.** The volume needs the converted disks *plus* the assembled OVA — budget
+roughly twice the *used* size of the largest VM you export. (A 20 GiB VM with
+~5 GiB used converts to a ~4.8 GiB VMDK.) The PVC is annotated
+`helm.sh/resource-policy: keep`, so uninstalling the release will not delete
+exported OVAs; remove it explicitly to reclaim the space.
+
+**Requirements.**
+
+- The claim must be **ReadWriteMany** — the API pod and each export Job mount it
+  simultaneously.
+- Enabling this grants the app `batch/jobs` CRUD cluster-wide (see
+  `templates/clusterrole.yaml`).
+- The VM must be **powered off** to be exported.
+- For the `vmware` and `portable` profiles, **prepare the guest first**:
+  `dracut --regenerate-all --force --no-hostonly` (or `update-initramfs -u -k all`
+  on Debian/Ubuntu with `MODULES=most`). A VM installed on Harvester has a
+  virtio-only initramfs and will not boot after the remap to LSI Logic. See
+  `docs/architecture-notes.md`.
+
+---
+
 ## Rancher menu link (NavLink)
 
 When `navLink.enabled` is true and the cluster has the `ui.cattle.io/v1` CRD

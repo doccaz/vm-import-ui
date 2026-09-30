@@ -32,6 +32,16 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -v -o /go/bin/vm-impo
 FROM registry.suse.com/bci/bci-base:latest
 WORKDIR /
 ENV KUBECONFIG="/kubeconfig"
+
+# qemu-img is required by the VM export worker (`vm-import-ui export-worker`),
+# which converts a VM's raw block devices into stream-optimized VMDK / qcow2.
+# The same image serves the API and the export Job, so there is one build and
+# one version to keep in sync.
+RUN zypper --non-interactive --gpg-auto-import-keys refresh && \
+    zypper --non-interactive install --no-recommends qemu-tools && \
+    zypper --non-interactive clean --all && \
+    qemu-img --version
+
 COPY --from=go-builder /go/bin/vm-import-ui /usr/local/bin/vm-import-ui
 COPY --from=builder /app/build /ui
 EXPOSE 8080
