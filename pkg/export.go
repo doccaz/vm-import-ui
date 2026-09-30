@@ -161,7 +161,7 @@ type exportConfig struct {
 	PVC           string // RWX claim the Job mounts
 	Image         string // image the Job runs
 	MaxConcurrent int
-	TTLSeconds    int32
+	TTLSeconds    int32 // 0 = keep finished export Jobs until deleted
 	DeadlineSecs  int64
 	RunAsUser     *int64
 	FSGroup       *int64
@@ -182,7 +182,7 @@ func loadExportConfig() exportConfig {
 		PVC:           os.Getenv("EXPORT_PVC"),
 		Image:         os.Getenv("EXPORT_IMAGE"),
 		MaxConcurrent: 2,
-		TTLSeconds:    3600,
+		TTLSeconds:    0,
 		DeadlineSecs:  6 * 60 * 60,
 		RunAsUser:     &defaultUser,
 		FSGroup:       &defaultGroup,

@@ -39,7 +39,7 @@ type ExportJobOptions struct {
 	Image         string
 	ExportPVC     string // RWX claim holding staged output and the finished OVA
 	SourceClaims  []string
-	TTLSeconds    int32
+	TTLSeconds    int32 // 0 = keep the finished Job until it is deleted; >0 = let Kubernetes expire it after this many seconds
 	DeadlineSecs  int64
 	LogLevel      string
 	RunAsUser     *int64
@@ -109,9 +109,16 @@ func buildExportJob(spec ExportSpec, opts ExportJobOptions) (*batchv1.Job, error
 	// Never retried: a retry re-reads and re-converts every byte, which on a
 	// multi-hundred-gigabyte disk is far worse than surfacing the failure.
 	backoff := int32(0)
-	ttl := opts.TTLSeconds
-	if ttl == 0 {
-		ttl = 3600
+	// The Job is the export's only state record: the list, download and delete
+	// endpoints all start from it. Once Kubernetes garbage-collects it, the OVA
+	// and its status folder are still on the export volume but nothing can list,
+	// fetch or remove them. So the default is to keep the Job until the user
+	// deletes it (which also purges the files). TTLSecondsAfterFinished must be
+	// left unset for that: 0 would mean "delete immediately" to Kubernetes.
+	var ttl *int32
+	if opts.TTLSeconds > 0 {
+		t := opts.TTLSeconds
+		ttl = &t
 	}
 	deadline := opts.DeadlineSecs
 	if deadline == 0 {
@@ -137,7 +144,7 @@ func buildExportJob(spec ExportSpec, opts ExportJobOptions) (*batchv1.Job, error
 		},
 		Spec: batchv1.JobSpec{
 			BackoffLimit:            &backoff,
-			TTLSecondsAfterFinished: &ttl,
+			TTLSecondsAfterFinished: ttl,
 			ActiveDeadlineSeconds:   &deadline,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{

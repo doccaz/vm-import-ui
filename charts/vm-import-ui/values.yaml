@@ -99,7 +99,11 @@ export:
   # Maximum simultaneous export Jobs. Exact at replicaCount 1; advisory above.
   maxConcurrent: 2
   # How long a finished export Job is kept before Kubernetes removes it.
-  ttlSecondsAfterFinished: 3600
+  # 0 (default) keeps it until you delete the export in the UI, which also
+  # removes the OVA. The Job is the export's only record: if it expires, the OVA
+  # stays on the export volume but can no longer be listed, downloaded or
+  # deleted from the UI, so only set this if you clean the volume up yourself.
+  ttlSecondsAfterFinished: 0
   # Hard cap on a single export.
   activeDeadlineSeconds: 21600
   # Server-side cap on browser downloads; larger OVAs must be fetched from the
