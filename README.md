@@ -67,9 +67,27 @@ for vSphere/ESXi, VirtualBox, Proxmox or plain KVM.
 - **Preview the OVF descriptor** before exporting, without touching the cluster
 - Runs as a **Kubernetes Job**: mounts the VM's disks read-only, converts with
   `qemu-img`, and writes the OVA to a shared ReadWriteMany volume
-- **Large disks are chunked** per DSP0243 (`ovf:chunkSize`), because a strict
-  USTAR tar member cannot exceed 8 GiB
+- **Disks that need it are chunked** per DSP0243 (`ovf:chunkSize`): a disk is
+  split only when it would not fit in one USTAR tar member (8 GiB − 1), and the
+  chunks are a whole number of 512-byte sectors. Smaller disks are never chunked
+  (see the known limitation below)
 - Live progress, per-export logs, and an optional browser download
+
+> **Known limitation: re-importing chunked OVAs with virt-v2v.** `virt-v2v -i ova`
+> (which Forklift's OVA provider uses) misreads DSP0243 chunk files as a VMware
+> snapshot chain: it keeps only the highest-numbered chunk and drops chunk 0, which
+> holds the partition table and boot sector, so OS inspection fails
+> ([libguestfs/virt-v2v#189](https://github.com/libguestfs/virt-v2v/issues/189);
+> a fix is proposed in
+> [#193](https://github.com/libguestfs/virt-v2v/pull/193) but not yet released).
+> **Consequence:** an export whose disk is 8 GiB or larger is chunked, and
+> cannot be re-imported through Forklift/virt-v2v until that fix ships in the
+> virt-v2v your cluster uses. Disks smaller than 8 GiB are a single file and are
+> unaffected. The OVA itself is valid (verified with `ovftool`, which reads chunked
+> OVAs correctly); only this consumer is affected.
+> Windows guests have two further, separate blockers in Harvester's virt-v2v image:
+> [harvester/harvester#11657](https://github.com/harvester/harvester/issues/11657)
+> and [#11775](https://github.com/harvester/harvester/issues/11775).
 
 > **The VM must be powered off.** Harvester's disks are ReadWriteMany block
 > volumes, so reading one while the VM runs produces a torn, unusable image and
@@ -282,8 +300,8 @@ cd frontend && npx react-scripts test --watchAll=false
 - **Preview the OVF descriptor** for any VM without touching the cluster
 - Exports run as Kubernetes Jobs: disks mounted read-only, converted with
   `qemu-img`, packaged as a DSP0243-conformant OVA on a ReadWriteMany volume
-- Disks larger than 2 GiB are **chunked** per the spec, so exports are not limited
-  by USTAR's 8 GiB per-member cap
+- Disks that exceed USTAR's 8 GiB per-member cap are **chunked** per the spec, in
+  whole 512-byte sectors, so exports are not limited by it
 - Running VMs are blocked from export — their ReadWriteMany block volumes would
   yield a torn image
 - Validated against `xmllint`/DSP8023, `virt-v2v`, VMware VDDK and `ovftool`, and
