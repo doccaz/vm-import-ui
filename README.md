@@ -289,7 +289,22 @@ cd frontend && npx react-scripts test --watchAll=false
 
 ---
 
-## Latest Release (v1.9.0)
+## Latest Release (v1.9.1)
+
+**Export records are kept until deleted.**
+
+- Finished export Jobs are no longer expired after an hour. The Job is an export's
+  only record, so when it expired the OVA was left on the export volume with no way
+  to list, download or delete it from the UI. `EXPORT_TTL_SECONDS` /
+  `export.ttlSecondsAfterFinished` now default to `0` (keep until the export is
+  deleted, which also removes the OVA); set a value above `0` to expire Jobs again.
+- README: chunking is described as it now behaves (only when USTAR requires it, in
+  whole 512-byte sectors), and the virt-v2v re-import limitation for chunked OVAs is
+  documented.
+
+---
+
+## Release (v1.9.0)
 
 **VM Export (Harvester → OVA)** — the reverse of the import path.
 
