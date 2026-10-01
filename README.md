@@ -73,16 +73,20 @@ for vSphere/ESXi, VirtualBox, Proxmox or plain KVM.
   (see the known limitation below)
 - Live progress, per-export logs, and an optional browser download
 
-> **Known limitation: re-importing chunked OVAs with virt-v2v.** `virt-v2v -i ova`
-> (which Forklift's OVA provider uses) misreads DSP0243 chunk files as a VMware
-> snapshot chain: it keeps only the highest-numbered chunk and drops chunk 0, which
-> holds the partition table and boot sector, so OS inspection fails
-> ([libguestfs/virt-v2v#189](https://github.com/libguestfs/virt-v2v/issues/189);
-> a fix is proposed in
-> [#193](https://github.com/libguestfs/virt-v2v/pull/193) but not yet released).
+> **Known limitation: re-importing chunked OVAs needs virt-v2v 2.13.7 or later.**
+> Before that release, `virt-v2v -i ova` (which Forklift's OVA provider uses)
+> misread DSP0243 chunk files as a VMware snapshot chain: it kept only the
+> highest-numbered chunk and dropped chunk 0, which holds the partition table and
+> boot sector, so OS inspection failed
+> ([libguestfs/virt-v2v#189](https://github.com/libguestfs/virt-v2v/issues/189)).
+> It is fixed upstream, merged through
+> [#193](https://github.com/libguestfs/virt-v2v/pull/193) and released in
+> virt-v2v 2.13.7, which also presents chunked disks to qemu without copying them.
 > **Consequence:** an export whose disk is 8 GiB or larger is chunked, and
-> cannot be re-imported through Forklift/virt-v2v until that fix ships in the
-> virt-v2v your cluster uses. Disks smaller than 8 GiB are a single file and are
+> cannot be re-imported through Forklift/virt-v2v unless the virt-v2v your cluster
+> uses is 2.13.7 or later. Harvester's `harvester-virt-v2v` image still bundles
+> 2.7.7 (checked with `harvester-virt-v2v:v1.8.1`), so on Harvester this stays
+> broken until that image is updated. Disks smaller than 8 GiB are a single file and are
 > unaffected. The OVA itself is valid (verified with `ovftool`, which reads chunked
 > OVAs correctly); only this consumer is affected.
 > Windows guests have two further, separate blockers in Harvester's virt-v2v image:
