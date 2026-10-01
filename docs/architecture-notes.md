@@ -245,13 +245,16 @@ required buys nothing and costs compatibility — `virt-v2v`'s `-i ova` input
 misreads multiple chunk files as a VMware CBT snapshot chain and silently
 converts only the last one instead of the whole disk
 ([libguestfs/virt-v2v#189](https://github.com/libguestfs/virt-v2v/issues/189)).
+That is fixed upstream (merged through #193, released in virt-v2v 2.13.7), but
+older builds, including the 2.7.7 in Harvester's `harvester-virt-v2v` image, still
+have it, which is why the default stays at the USTAR cap.
 
 When a disk does have to be split, the chunk size is rounded down to a multiple
 of 512 (`chunkAlign`), i.e. `2^33 - 512` rather than `2^33 - 1`. A disk that fits
 in one member is still not chunked. The alignment lets a consumer present the
-chunks as one disk without copying them (`virt-v2v` can describe them as one
-VMDK with a `FLAT` extent per chunk, counted in sectors); with unaligned chunks
-it has to concatenate the whole disk into a temporary file first.
+chunks as one disk without copying them (`virt-v2v` 2.13.7 and later describe
+them as one VMDK with a `FLAT` extent per chunk, counted in sectors); with
+unaligned chunks it has to concatenate the whole disk into a temporary file first.
 
 ### Profiles
 
