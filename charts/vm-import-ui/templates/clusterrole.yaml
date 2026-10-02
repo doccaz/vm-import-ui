@@ -6,88 +6,60 @@ metadata:
   labels:
     {{- include "vm-import-ui.labels" . | nindent 4 }}
 rules:
-
-  # ── Core resources ──────────────────────────────────────────────────────────
+  # Derived from the API calls in pkg/*.go (see docs/rbac-audit.md).
   - apiGroups: [""]
-    resources: ["namespaces", "nodes"]
-    verbs: ["get", "list", "watch"]
-
+    resources: ["namespaces"]
+    verbs: ["get", "list", "create"]
   - apiGroups: [""]
-    resources: ["pods", "pods/log"]
-    verbs: ["get", "list", "watch"]
-
+    resources: ["pods"]
+    verbs: ["get", "list"]
   - apiGroups: [""]
-    resources: ["services", "configmaps", "events"]
-    verbs: ["get", "list", "watch"]
-
-  # Secrets: needed for provider credentials (vCenter passwords, CA certs, etc.)
+    resources: ["pods/log"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get"]
+  # Source/provider credentials. Only fetched by name: no list/watch.
   - apiGroups: [""]
     resources: ["secrets"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-
-  # PVCs / PVs: data volumes land here during migration
+    verbs: ["get", "create", "update", "delete"]
   - apiGroups: [""]
-    resources: ["persistentvolumeclaims", "persistentvolumes"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-
-  # ── Storage ─────────────────────────────────────────────────────────────────
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list"]
   - apiGroups: ["storage.k8s.io"]
     resources: ["storageclasses"]
-    verbs: ["get", "list", "watch"]
-
-  # ── KubeVirt (virtual machines) ─────────────────────────────────────────────
+    verbs: ["get", "list"]
   - apiGroups: ["kubevirt.io"]
-    resources:
-      - virtualmachines
-      - virtualmachineinstances
-      - virtualmachineinstancemigrations
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-
-  # ── CDI (containerized data importer — disk images) ─────────────────────────
-  - apiGroups: ["cdi.kubevirt.io"]
-    resources: ["datavolumes", "datasources"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-
-  # ── Harvester-specific resources ─────────────────────────────────────────────
-  # harvesterhci.io covers VirtualMachineImage, KeyPair, Setting, etc.
+    resources: ["virtualmachines", "virtualmachineinstances"]
+    verbs: ["get", "list"]
   - apiGroups: ["harvesterhci.io"]
-    resources: ["*"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-
-  # ── VM Import Controller (native Harvester migration engine) ─────────────────
-  # Resources: VmwareSource, VirtualMachineImport, VirtualMachineImportPlan, etc.
-  - apiGroups: ["migration.harvesterhci.io"]
-    resources: ["*"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-
-  # ── Forklift / Konveyor MTV (second migration engine) ────────────────────────
-  - apiGroups: ["forklift.konveyor.io"]
-    resources:
-      - providers
-      - plans
-      - migrations
-      - networkmaps
-      - storagemaps
-      - hosts
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-
-  # ── Multus network attachments (for network mapping) ─────────────────────────
+    resources: ["settings"]
+    verbs: ["get"]
   - apiGroups: ["k8s.cni.cncf.io"]
     resources: ["network-attachment-definitions"]
-    verbs: ["get", "list", "watch"]
+    verbs: ["list"]
+
+  # ── VM Import Controller ─────────────────────────────────────────────────────
+  - apiGroups: ["migration.harvesterhci.io"]
+    resources: ["vmwaresources", "ovasources", "virtualmachineimports"]
+    verbs: ["get", "list", "create", "update", "delete"]
+  - apiGroups: ["migration.harvesterhci.io"]
+    resources: ["virtualmachineimports/status"]
+    verbs: ["update"]
+
+  # ── Forklift / Konveyor MTV ──────────────────────────────────────────────────
+  - apiGroups: ["forklift.konveyor.io"]
+    resources: ["providers", "plans", "networkmaps", "storagemaps", "migrations"]
+    verbs: ["get", "list", "create", "update", "delete"]
 
   {{- if .Values.export.enabled }}
-  # ── Jobs (VM export runs as a Job in the source VM's namespace) ──────────────
-  # The Job is also the export's state record, so listing them is how the API
-  # enumerates exports. No ConfigMap write access is needed. Granted only when
-  # export is enabled, so a default install carries no Job permissions.
+  # ── VM export: the Job is the export's state record; the claim is created in
+  # the source VM's namespace when missing. Granted only when export is enabled.
   - apiGroups: ["batch"]
     resources: ["jobs"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+    verbs: ["get", "list", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["create"]
   {{- end }}
-
-  # ── Apps (informational — pod controller lookups) ────────────────────────────
-  - apiGroups: ["apps"]
-    resources: ["deployments", "replicasets"]
-    verbs: ["get", "list", "watch"]
 {{- end }}
