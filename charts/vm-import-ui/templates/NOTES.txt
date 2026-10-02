@@ -2,6 +2,15 @@
   Harvester VM Import UI — {{ .Release.Name }}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+{{- if eq .Values.service.type "ClusterIP" }}
+The UI is reachable through the Rancher/Harvester menu entry (it uses the
+Kubernetes service proxy), or with a port-forward:
+
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "vm-import-ui.fullname" . }} 8080:{{ .Values.service.port }}
+
+Cluster admins can always open it. To let other users in, set access.users /
+access.groups (it grants services/proxy on this Service only).
+{{- else }}
 The UI is exposed via NodePort.  To find the URL:
 
   NODE_IP=$(kubectl get nodes \
@@ -13,6 +22,10 @@ The UI is exposed via NodePort.  To find the URL:
     -o jsonpath='{.spec.ports[0].nodePort}')
 
   echo "http://${NODE_IP}:${NODE_PORT}"
+
+Tip: the menu entry works without a NodePort. Set service.type=ClusterIP to stop
+exposing the UI on every node.
+{{- end }}
 
 ━━ Authentication ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 

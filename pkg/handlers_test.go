@@ -435,3 +435,14 @@ func TestDeleteForkliftProviderHandler(t *testing.T) {
 		t.Log("delete of nonexistent provider returned 200 (fake client may not error)")
 	}
 }
+
+func TestOvaInventoryRejectsUnknownResource(t *testing.T) {
+	handler := HandleGetForkliftOvaInventory(newTestClientsWithDynamic(nil))
+	for _, res := range []string{"../providers", "secrets", "vms/../../x"} {
+		rr := executeRequest(handler, "GET", "/x", nil,
+			map[string]string{"namespace": "forklift", "name": "p", "resource": res})
+		if rr.Code != http.StatusBadRequest {
+			t.Errorf("resource %q: got %d, want 400", res, rr.Code)
+		}
+	}
+}
