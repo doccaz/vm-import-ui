@@ -1,0 +1,48 @@
+{{- if .Values.access.createRole }}
+{{- $svc := include "vm-import-ui.fullname" . }}
+{{- $port := .Values.service.port }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $svc }}-access
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vm-import-ui.labels" . | nindent 4 }}
+rules:
+  # Opening the UI through the Kubernetes service proxy (the Rancher menu entry)
+  # is authorised on this resource. The apiserver checks the name segment as
+  # written in the URL, so the common spellings are listed.
+  - apiGroups: [""]
+    resources: ["services/proxy"]
+    resourceNames:
+      - {{ $svc | quote }}
+      - {{ printf "%s:%v" $svc $port | quote }}
+      - {{ printf "http:%s:%v" $svc $port | quote }}
+      - {{ printf "http:%s:http" $svc | quote }}
+    verbs: ["get", "create", "update", "delete"]
+{{- if or .Values.access.users .Values.access.groups }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $svc }}-access
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "vm-import-ui.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $svc }}-access
+subjects:
+  {{- range .Values.access.users }}
+  - apiGroup: rbac.authorization.k8s.io
+    kind: User
+    name: {{ . | quote }}
+  {{- end }}
+  {{- range .Values.access.groups }}
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: {{ . | quote }}
+  {{- end }}
+{{- end }}
+{{- end }}

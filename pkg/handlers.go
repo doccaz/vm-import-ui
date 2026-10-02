@@ -1975,6 +1975,9 @@ func HandleGetForkliftPlanYAML(clients *K8sClients) http.HandlerFunc {
 	}
 }
 
+// ovaInventoryResources are the forklift-inventory collections the UI reads.
+var ovaInventoryResources = map[string]bool{"vms": true, "networks": true, "disks": true}
+
 // HandleGetForkliftOvaInventory proxies inventory requests for OVA providers through the
 // forklift-inventory service. OVA providers auto-deploy an OVA server pod that scans
 // NFS shares for OVF/OVA files. The inventory service exposes VMs, networks, and disks.
@@ -1987,6 +1990,12 @@ func HandleGetForkliftOvaInventory(clients *K8sClients) http.HandlerFunc {
 		resource := vars["resource"]
 		if resource == "" {
 			resource = "vms"
+		}
+		// The value is spliced into the inventory URL, so only known resources
+		// are accepted; anything else could address other inventory paths.
+		if !ovaInventoryResources[resource] {
+			respondWithError(w, http.StatusBadRequest, "Unsupported OVA inventory resource: "+resource)
+			return
 		}
 
 		// 1. Get the Provider CR to obtain its UID
