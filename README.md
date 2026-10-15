@@ -188,6 +188,60 @@ granting access to Harvester, KubeVirt, CDI, the VM Import Controller, and Forkl
 
 Package a versioned tarball with `helm package charts/vm-import-ui`.
 
+## Deploying with Fleet (GitOps)
+
+Harvester ships [Fleet](https://fleet.rancher.io/), so the chart can be installed
+and kept in sync from Git instead of running `helm install` by hand. The chart
+carries a [`fleet.yaml`](charts/vm-import-ui/fleet.yaml) that sets the target
+namespace and Helm release name (Fleet ignores the `catalog.cattle.io/namespace`
+annotation in `Chart.yaml`).
+
+Apply a `GitRepo` in the `fleet-local` workspace (the Harvester cluster itself):
+
+```bash
+kubectl apply -f docs/fleet/gitrepo.yaml
+```
+
+```yaml
+apiVersion: fleet.cattle.io/v1alpha1
+kind: GitRepo
+metadata:
+  name: vm-import-ui
+  namespace: fleet-local
+spec:
+  repo: https://github.com/doccaz/vm-import-ui
+  branch: master            # or `revision:` to pin a tag/commit
+  paths:
+    - charts/vm-import-ui
+```
+
+Check progress with `kubectl -n fleet-local get gitrepo,bundle` — the bundle
+`vm-import-ui-charts-vm-import-ui` should reach `Ready`. Fleet installs a Helm
+release named `vm-import-ui` in the `vm-import-ui` namespace; browse to
+`http://<any-node-ip>:32000` as usual. Equivalent UI path: **Continuous Delivery →
+Git Repos → Create** in the embedded Rancher UI.
+
+**Customising values.** Put overrides under `helm.values` in
+`charts/vm-import-ui/fleet.yaml` (same keys as `values.yaml`), commit, and Fleet
+rolls them out. To avoid editing the chart repo, fork it or use a small config
+repo whose `fleet.yaml` uses `helm.repo: https://doccaz.github.io/vm-import-ui`,
+`helm.chart: vm-import-ui` and `helm.version` (untested here).
+
+**Migrating an existing `helm install`.** Fleet cannot adopt resources owned by
+another Helm release, so installing over a running `vm-import-ui` release fails
+(or fights it). Uninstall first (`helm uninstall vm-import-ui -n vm-import-ui`),
+then apply the `GitRepo`, keeping the same `service.nodePort`. To trial Fleet
+alongside a live release, use a different `releaseName`, `defaultNamespace`
+and `service.nodePort`, and set `navLink.enabled: false` (the ClusterRole,
+ClusterRoleBinding and NavLink names derive from the release name).
+
+**Removing it.** Delete the `GitRepo`; Fleet uninstalls the release and its
+cluster-scoped resources. It leaves the (then empty) namespace behind.
+
+> Verified on Harvester 1.8 (Fleet 0.15): install, UI reachable, and clean
+> uninstall. Fleet did *not* revert a manual `kubectl scale` within 45 s, so
+> don't rely on it for strict drift correction of every field.
+
 ---
 
 ## Screenshots — VM Import Controller

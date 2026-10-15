@@ -38,6 +38,8 @@ Thumbs.db
 !.github/**/*.yml
 # Helm chart manifests are not kubeconfigs — keep them tracked
 !charts/**/*.yaml
+# Example Fleet GitRepo manifest (no secrets)
+!docs/fleet/*.yaml
 
 # --- Container build artifacts ---
 *.tar

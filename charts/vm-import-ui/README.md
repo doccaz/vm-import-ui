@@ -20,6 +20,21 @@ helm install vm-import-ui vm-import-ui/vm-import-ui \
 Then open `http://<any-node-ip>:32000` (the install notes print the exact URL),
 or use the **VM Import UI** entry added to the Rancher / Harvester menu.
 
+## Installing with Fleet
+
+Harvester's built-in Fleet can deploy this chart from Git. The chart ships a
+`fleet.yaml` (namespace `vm-import-ui`, release `vm-import-ui`); point a
+`GitRepo` in `fleet-local` at `charts/vm-import-ui`:
+
+```bash
+kubectl apply -f https://raw.githubusercontent.com/doccaz/vm-import-ui/master/docs/fleet/gitrepo.yaml
+```
+
+Put value overrides under `helm.values` in `fleet.yaml`. Uninstall any existing
+`helm install` of the chart first — Fleet can't adopt another release's
+resources. See "Deploying with Fleet" in the
+[project README](https://github.com/doccaz/vm-import-ui#deploying-with-fleet-gitops).
+
 ## How it authenticates
 
 The pod talks to the cluster API using its **ServiceAccount** token — no external
