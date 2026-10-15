@@ -1,0 +1,13 @@
+# Fleet configuration — lets Fleet (built into Harvester / Rancher) deploy this
+# chart straight from Git via a GitRepo pointing at charts/vm-import-ui.
+# See "Deploying with Fleet" in README.md. Fleet ignores the
+# catalog.cattle.io/namespace annotation in Chart.yaml, hence defaultNamespace.
+defaultNamespace: vm-import-ui
+helm:
+  releaseName: vm-import-ui
+  # Per-deployment overrides (same keys as values.yaml), e.g.:
+  #   service:
+  #     nodePort: 32000
+  #   image:
+  #     tag: latest
+  values: {}

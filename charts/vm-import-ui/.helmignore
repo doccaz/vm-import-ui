@@ -6,3 +6,6 @@
 *.tgz
 .vscode/
 .idea/
+
+# Fleet-only descriptor, not part of the chart package
+fleet.yaml

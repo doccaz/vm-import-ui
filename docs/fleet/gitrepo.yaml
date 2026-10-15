@@ -1,0 +1,13 @@
+# Deploys the vm-import-ui chart onto the Harvester cluster itself via Fleet.
+#   kubectl apply -f docs/fleet/gitrepo.yaml
+# `fleet-local` is the workspace holding Harvester's own (local) cluster.
+apiVersion: fleet.cattle.io/v1alpha1
+kind: GitRepo
+metadata:
+  name: vm-import-ui
+  namespace: fleet-local
+spec:
+  repo: https://github.com/doccaz/vm-import-ui
+  branch: master            # or pin a tag/commit: use `revision:` instead of `branch:`
+  paths:
+    - charts/vm-import-ui
