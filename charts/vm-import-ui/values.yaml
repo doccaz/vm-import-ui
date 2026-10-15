@@ -24,6 +24,11 @@ rbac:
   create: true
 
 service:
+  # NodePort exposes the UI, unauthenticated, on every node. The "VM Import UI"
+  # menu entry does NOT need it: it reaches the Service through the Kubernetes
+  # API proxy, so `type: ClusterIP` works and is the safer choice. The default is
+  # kept as NodePort only so existing installs that use http://<node>:<nodePort>
+  # are not broken on upgrade.
   type: NodePort
   port: 8080
   # Fixed NodePort. Kubernetes only allows 30000-32767 for NodePorts, so a host
@@ -39,6 +44,16 @@ env:
   uiPath: /ui
   # Set to "true" to run in dev/mock mode without a real cluster
   useMockData: "false"
+
+# Who may open the UI through the Kubernetes service proxy (the menu entry).
+# Cluster admins always can. For anyone else this creates a Role granting
+# services/proxy on the UI Service and binds it to the listed users/groups.
+# This only controls who can reach the UI; what the UI can do is set by its
+# ServiceAccount (see rbac.create).
+access:
+  createRole: true
+  users: []   # e.g. ["user-abc12"]
+  groups: []  # e.g. ["local://g-xyz78"]
 
 # Rancher UI integration: create a ui.cattle.io NavLink so the app shows up in
 # the Rancher / Harvester left-hand menu. The NavLink is only rendered when the
