@@ -120,6 +120,15 @@ spec:
             - name: USE_MOCK_DATA
               value: {{ .Values.env.useMockData | quote }}
 
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1001
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
           ports:
             - name: http
               containerPort: 8080
@@ -145,6 +154,8 @@ spec:
             - name: kubeconfig-dir
               mountPath: /var/kubeconfig
               readOnly: true
+            - name: tmp
+              mountPath: /tmp
             {{- if .Values.export.enabled }}
             - name: export-storage
               mountPath: {{ .Values.export.storage.mountPath }}
@@ -157,6 +168,8 @@ spec:
 
       volumes:
         - name: kubeconfig-dir
+          emptyDir: {}
+        - name: tmp
           emptyDir: {}
         {{- if .Values.export.enabled }}
         - name: export-storage
