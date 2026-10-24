@@ -26,6 +26,10 @@ spec:
           env:
             - name: LOG_LEVEL
               value: {{ .Values.env.logLevel | quote }}
+            {{- if .Values.env.insecureSkipTLSVerify }}
+            - name: INSECURE_SKIP_TLS_VERIFY
+              value: "true"
+            {{- end }}
             {{- if .Values.export.enabled }}
             # VM export. EXPORT_ROOT is this pod's view of the shared volume
             # (used to read worker status files and serve downloads);
