@@ -350,7 +350,19 @@ cd frontend && npx react-scripts test --watchAll=false
 
 ---
 
-## Latest Release (v1.9.2)
+## Latest Release (v1.10.0)
+
+**The UI now verifies the Kubernetes API server certificate, and runs with a much narrower ClusterRole.**
+
+- **TLS verification.** The backend used to skip verification of the API server certificate. It now verifies it against the pod's service-account CA. If that cannot work on a cluster, set `env.insecureSkipTLSVerify=true` (off by default, logged as a warning).
+- **In-cluster config.** The `generate-kubeconfig` init container and its volume are gone; the pod uses the service account directly.
+- **Narrowed ClusterRole.** The broad grants (full verbs, plus `watch`, `patch`, wildcards) are replaced by the verbs and resources the UI calls (derivation in `docs/rbac-audit.md`), plus `virtualmachines create`, which Forklift's plan admission webhook checks. Export rules are rendered only when `export.enabled` is set.
+- **Pod hardening, proxy-access Role and OVA inventory allow-list** (PR #14), and `helm upgrade --reuse-values` now renders (the `access` block has a default).
+- **Upgrade notes.** Release the chart and the image together: the chart 0.4.0 with an older image crash-loops (`specifying a root certificates file with the insecure flag is not allowed`). Anything that relied on the old broader grants may need a rule added.
+
+---
+
+## Release (v1.9.2)
 
 **Deleting an export now removes its files in every namespace.**
 
