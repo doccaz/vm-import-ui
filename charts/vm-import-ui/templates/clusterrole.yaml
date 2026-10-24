@@ -32,6 +32,12 @@ rules:
   - apiGroups: ["kubevirt.io"]
     resources: ["virtualmachines", "virtualmachineinstances"]
     verbs: ["get", "list"]
+  # Not called by the UI itself: Forklift's plan admission webhook checks that
+  # the requester may create VMs in the plan's target namespace, so creating a
+  # Forklift plan fails without it. It grants nothing the UI uses directly.
+  - apiGroups: ["kubevirt.io"]
+    resources: ["virtualmachines"]
+    verbs: ["create"]
   - apiGroups: ["harvesterhci.io"]
     resources: ["settings"]
     verbs: ["get"]
