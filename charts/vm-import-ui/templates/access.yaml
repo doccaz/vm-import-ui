@@ -1,4 +1,5 @@
-{{- if .Values.access.createRole }}
+{{- $access := .Values.access | default (dict "createRole" true) }}
+{{- if $access.createRole }}
 {{- $svc := include "vm-import-ui.fullname" . }}
 {{- $port := .Values.service.port }}
 apiVersion: rbac.authorization.k8s.io/v1
@@ -20,7 +21,7 @@ rules:
       - {{ printf "http:%s:%v" $svc $port | quote }}
       - {{ printf "http:%s:http" $svc | quote }}
     verbs: ["get", "create", "update", "delete"]
-{{- if or .Values.access.users .Values.access.groups }}
+{{- if or $access.users $access.groups }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
@@ -34,12 +35,12 @@ roleRef:
   kind: Role
   name: {{ $svc }}-access
 subjects:
-  {{- range .Values.access.users }}
+  {{- range $access.users }}
   - apiGroup: rbac.authorization.k8s.io
     kind: User
     name: {{ . | quote }}
   {{- end }}
-  {{- range .Values.access.groups }}
+  {{- range $access.groups }}
   - apiGroup: rbac.authorization.k8s.io
     kind: Group
     name: {{ . | quote }}
