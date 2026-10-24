@@ -184,6 +184,7 @@ granting access to Harvester, KubeVirt, CDI, the VM Import Controller, and Forkl
 | `service.nodePort` | `32000` | Fixed NodePort (must be 30000–32767; high in range to avoid collisions) |
 | `service.type` | `NodePort` | Service type (`ClusterIP`/`LoadBalancer` also supported) |
 | `env.logLevel` | `info` | `debug` \| `info` \| `warn` \| `error` |
+| `env.insecureSkipTLSVerify` | `false` | `true` disables API server certificate verification (not recommended) |
 | `rbac.create` | `true` | Create the ClusterRole + binding |
 
 Package a versioned tarball with `helm package charts/vm-import-ui`.

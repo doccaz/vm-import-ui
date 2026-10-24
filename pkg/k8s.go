@@ -38,10 +38,7 @@ func NewK8sClients() (*K8sClients, error) {
 		log.Info("Using in-cluster config.")
 	}
 
-	// Set the Insecure flag to true
-	config.TLSClientConfig.Insecure = true
-	// Explicitly clear any certificate authority data
-	config.TLSClientConfig.CAData = nil
+	applyTLSPolicy(config)
 
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
@@ -57,4 +54,17 @@ func NewK8sClients() (*K8sClients, error) {
 		Clientset: clientset,
 		Dynamic:   dynamicClient,
 	}, nil
+}
+
+// applyTLSPolicy verifies the API server certificate against the CA from the
+// ServiceAccount (in-cluster) or the kubeconfig. Skipping verification is an
+// explicit, logged opt-out for development clusters only.
+func applyTLSPolicy(config *rest.Config) {
+	if os.Getenv("INSECURE_SKIP_TLS_VERIFY") != "true" {
+		return
+	}
+	log.Warn("INSECURE_SKIP_TLS_VERIFY=true: API server certificate is NOT verified")
+	config.TLSClientConfig.Insecure = true
+	config.TLSClientConfig.CAData = nil
+	config.TLSClientConfig.CAFile = ""
 }
