@@ -175,8 +175,14 @@ helm install vm-import-ui ./charts/vm-import-ui \
 
 Then browse to `http://<any-node-ip>:32000` (the `helm install` output prints the exact URL).
 
-The chart creates a Deployment, a NodePort Service, and a ServiceAccount with a ClusterRole
-granting access to Harvester, KubeVirt, CDI, the VM Import Controller, and Forklift resources.
+The chart creates a Deployment, a NodePort Service, and a ServiceAccount with a ClusterRole.
+The role is limited to what the UI calls: read access to namespaces, pods, services,
+storage classes, VMs and network attachments; full access to the VM Import Controller and
+Forklift objects and to the provider credential Secrets it manages; `create` on VMs, which
+Forklift's plan admission webhook checks for; and, only with `export.enabled`, Jobs and
+PVC creation for exports. `docs/rbac-audit.md` shows how the rules were derived and what
+that audit cannot see (admission-time checks). The pod verifies the API server certificate;
+`env.insecureSkipTLSVerify=true` turns that off for clusters where it cannot work.
 
 | Common value | Default | Purpose |
 |--------------|---------|---------|
@@ -346,7 +352,7 @@ cd frontend && npx react-scripts test --watchAll=false
 | `EXPORT_DOWNLOAD_MAX_BYTES` | `2147483648` | Server-side cap on browser downloads |
 | `EXPORT_RUN_AS_USER` / `EXPORT_FS_GROUP` | `0` | Export Job security context (block devices land as `root:disk`) |
 
-> **Upgrading with Helm:** `helm upgrade --reuse-values` reuses the *previous release's computed values, including the old chart's defaults*, so it keeps a previous default such as `export.ttlSecondsAfterFinished: 3600` instead of picking up a new one. Use `--reset-then-reuse-values` (keeps only the values you set yourself, takes new chart defaults), or set the value explicitly.
+> **Upgrading with Helm:** `helm upgrade --reuse-values` reuses the *previous release's computed values, including the old chart's defaults*, so it keeps a previous default such as `export.ttlSecondsAfterFinished: 3600` instead of picking up a new one. Use `--reset-then-reuse-values` (keeps only the values you set yourself, takes new chart defaults), or set the value explicitly. Chart 0.4.0 and later render even when a reused value set predates a block such as `access`, but the other defaults above still apply.
 
 ---
 
