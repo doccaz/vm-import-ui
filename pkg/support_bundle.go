@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	appVersion                 = "1.9.2"
+	appVersion                 = "1.10.0"
 	supportBundleSchemaVersion = "1"
 )
 
